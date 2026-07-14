@@ -1,0 +1,3 @@
+<template>
+  <PDVDiagram />
+</template>

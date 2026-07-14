@@ -1,0 +1,195 @@
+{
+    "menu": {
+        "main": {
+            "title": "Menu principal",
+            "options": {
+                "my_projects": "Projeto Exemplo",
+                "tts_options": "Configuração da síntese de voz",
+                "language": "Idioma",
+                "help": "Ajuda"
+            }
+        },
+        "tts": {
+            "title": "Configuração da síntese de voz",
+            "options": {
+                "increase": "Aumentar velocidade da fala",
+                "decrease": "Reduzir velocidade da fala"
+            }
+        },
+        "projects": {
+            "title": "Meus projetos",
+            "options": {
+                "new_project": "Novo projeto",
+                "list_projects": "Listar projetos"
+            }
+        },
+        "project_actions": {
+            "title": "Ações para projetos",
+            "options": {
+                "edit_project": "Editar projeto",
+                "share_project": "Compartilhar projeto",
+                "export_project": "Exportar projeto",
+                "delete_project": "Excluir projeto"
+            }
+        },
+        "project_list": {
+            "title": "Lista de projetos"
+        },
+        "der_flow": {
+            "titles": {
+                "default": "Projeto {project}",
+                "entity_options": "Opções da entidade {entity}",
+                "delete_entity": "Excluir entidade {entity}",
+                "relationship_options": "Opções do relacionamento {relationship}",
+                "delete_relationship": "Excluir relacionamento {relationship}",
+                "attribute_options": "Opções do atributo {attribute}",
+                "delete_attribute": "Excluir atributo {attribute}",
+                "entity_list": "Entidades do diagrama {diagram}",
+                "attribute_list": "Atributos da entidade {entity}",
+                "relationships_list": "Relacionamentos do diagrama {diagram}"
+            },
+            "options": {
+                "entity": {
+                    "create": "Criar entidade",
+                    "navigate": "Navegar pelas entidades do diagrama",
+                    "read": "Leitura das entidades do diagrama",
+                    "created_entities": "Entidades criadas: {entities}",
+                    "name": "Digite o nome da entidade",
+                    "edit": "Editar entidade",
+                    "delete": "Excluir entidade",
+                    "update_name": "Editar o nome da entidade",
+                    "attribute": {
+                        "create": "Criar atributo",
+                        "navigate":"Navegar pelos atributos da entidade",
+                        "read": "Leitura dos atributos da entidade",
+                        "name": "Digite o nome do atributo",
+                        "type": "Selecione o tipo do atributo",
+                        "delete": "Excluir atributo",
+                        "edit": "Editar atributo",
+                        "update_name": "Editar o nome do atributo",
+                        "update_type": "Selecione o novo tipo do atributo"
+                    }
+                },
+                "relationship": {
+                    "create": "Criar relacionamento",
+                    "navigate": "Navegar pelos relacionamentos do diagrama",
+                    "read":"Leitura dos relacionamentos do diagrama",
+                    "readOnly": "Leitura do relacionamento",
+                    "name": "Digite o nome do relacionamento",
+                    "edit": "Editar relacionamento",
+                    "delete": "Excluir relacionamento",
+                    "update_name": "Editar o nome do relacionamento",
+                    "elementA": "Definir entidade A",
+                    "elementB": "Definir entidade B",
+                    "type": "Definir tipo do relacionamento",
+                    "cardinality": "Definir cardinalidade"
+                },
+                "diagram": {
+                    "read": "Leitura do diagrama {diagram}"
+                }
+            }
+        }
+    },
+    "der": {
+        "explanation": {
+            "VARCHAR": "Usado para armazenar strings de tamanho variável.",
+            "TEXT": "Usado para armazenar textos longos.",
+            "INT": "Usado para armazenar números inteiros.",
+            "FLOAT": "Usado para armazenar números de ponto flutuante.",
+            "DOUBLE": "Usado para armazenar números de ponto flutuante de maior precisão.",
+            "TIMESTAMP": "Usado para armazenar data e hora, com fuso horário opcional.",
+            "BOOLEAN": "Usado para armazenar valores booleanos (verdadeiro ou falso).",
+            "BLOB": "Usado para armazenar grandes objetos binários, como arquivos ou imagens.",
+            "JSON": "Usado para armazenar dados estruturados em formato JSON.",
+            "UUID": "Usado para armazenar identificadores únicos universais (UUID).",
+            "OneToOne": "Esse tipo de relacionamento ocorre quando cada instância da entidade A está associada a, no máximo, uma instância da entidade B",
+            "OneToMany": "Esse tipo de relacionamento ocorre quando cada instância da entidade A pode estar associada a várias instâncias da entidade B, mas cada instância da entidade B está associada a, no máximo, uma instância da entidade A.",
+            "ManyToMany": "Esse tipo de relacionamento ocorre quando várias instâncias da entidade A podem estar associadas a várias instâncias da entidade B, e vice-versa. Ou seja, uma instância da entidade A pode estar ligada a várias instâncias da entidade B, e uma instância da entidade B pode estar ligada a várias instâncias da entidade A.",
+            "common": "Esse tipo de relacionamento ocorre quando uma entidade depende totalmente da outra para existir",
+            "weak": "Esse tipo de relacionamento ocorre quando uma entidade, chamada de entidade fraca, depende de outra entidade, conhecida como entidade forte, para existir.",
+            "inheritance": "Esse tipo de relacionamento reflete um modelo de herança entre entidades. No contexto de bancos de dados, isso pode ser representado por entidades que compartilham atributos comuns",
+            "associative": "Esse tipo de relacionamento é utilizado para modelar relacionamentos muitos para muitos. Geralmente, é representado por uma tabela associativa que liga duas ou mais entidades.",
+            "entity": "Entidades representam os objetos ou conceitos principais sobre os quais você deseja armazenar informações no banco de dados. Cada entidade geralmente se torna uma tabela no banco de dados.",
+            "attribute": "Os atributos são as características ou propriedades das entidades. Cada entidade possui um conjunto de atributos que descrevem as informações armazenadas. Em uma tabela de banco de dados, os atributos correspondem às colunas.",
+            "relationship": "Relacionamentos definem como as entidades estão conectadas entre si. No modelo ER, um relacionamento indica a forma como duas ou mais entidades interagem. Por exemplo, o relacionamento entre uma entidade Cliente e uma entidade Pedido pode ser que um cliente faz vários pedidos, enquanto um pedido é feito por um único cliente"
+        },
+        "cardinality": {
+            "OneToOne": "Um para um",
+            "OneToMany": "Um para muitos",
+            "ManyToMany": "Muitos para muitos"
+        },
+        "relationship_type": {
+            "common": "Comum",
+            "weak": "Fraco",
+            "inheritance": "Herança",
+            "associative": "Associativo"
+        },
+        "read_aux": {
+            "diagram": "Leitura Completa do Diagrama: {diagram}. \n",
+            "entities": "Entidades e seus Atributos: \n",
+            "entity_with_attrs": "A entidade {entity} é composta pelos seguintes atributos: \n",
+            "entity_without_attrs": "Entidade {entity}, sem atributos. \n",
+            "attr": "Atributo {name} de tipo {type}. \n",
+            "relationships": "Relacionamentos entre Entidades: \n",
+            "relationship": "O relacionamento {name} conecta as entidades {entityA} e {entityB}. Tipo de relacionamento: {type}.  Cardinalidade: {cardinality}. \n"
+        }
+    },
+    "message": {
+        "speech_rate_test": "Essa é uma fala teste para verificar a velocidade da leitura. Ajuste conforme necessário para garantir que a fala esteja clara e compreensível. Velocidade atual: {rate}",
+        "navigation_helper": "Para navegar entre as opções do menu, utilize as teclas CIMA e BAIXO para se mover entre as opções. Se preferir, use TAB para avançar para a próxima opção. Pressione ENTER para confirmar sua escolha ou ESC para voltar ao menu anterior. Para retornar ao menu principal, pressione CTRL + HOME. Para acessar o menu de configuração da síntese de voz, pressione CTRL + ALT. Caso deseje interromper a leitura, pressione CTRL.",
+        "helper_text": "Pressione a tecla F1 para mais informações sobre a opção selecionada",
+        "has_no_entities": "É necessário criar ao menos uma entidade para acessar essa funcionalidade.",
+        "has_no_relationships": "É necessário criar ao menos um relacionamento para acessar essa funcionalidade.",
+        "has_not_two_entities": "É necessário criar ao menos duas entidades para acessar essa funcionalidade.",
+        "has_no_attributes": "É necessário que a entidade possua ao menos um atributo para acessar essa funcionalidade.",
+        "delete_entity": "Ao excluir a entidade, todos os relacionamentos associados serão perdidos.",
+        "loading": "Carregando, por favor aguarde...",
+        "desktop_only": "Olá! Nosso sistema foi otimizado para uso em desktop, com navegação e funcionalidades específicas para teclado, garantindo uma experiência completa e eficiente. Para aproveitar todos os recursos, recomendamos acessar a plataforma em um computador. Agradecemos sua compreensão!",
+        "empty_input": "A informação 'Nome' está em branco. Por favor, preencha para continuar.",
+        "hide_assistant": "Ocultar Assistente",
+        "show_assistant": "Exibir Assistente"
+    },
+    "common": {
+        "confirm": "Confirmar",
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "home": "Início",
+        "help": "Ajuda"
+    },
+    "welcome": {
+        "welcome": "Bem-vindo ao Diagrama Além da Visão!",
+        "goal": "Este projeto foi desenvolvido para facilitar o aprendizado de Diagramas Entidade-Relacionamento, oferecendo um ambiente inclusivo para pessoas com e sem deficiência visual.",
+        "tts": "Nossa aplicação possui uma síntese de voz integrada para uma experiência mais acessível. Recomendamos desativar o leitor de tela, pois algumas informações são transmitidas exclusivamente pela nossa síntese nativa, que pode ser configurada para atender às suas necessidades.",
+        "hotkeys": "Navegação na plataforma: CIMA e BAIXO: mova-se entre as opções. TAB: avance para a próxima opção. ENTER: confirme a seleção. ESC: retorne ao menu anterior. CTRL: Interrompa a leitura.",
+        "guest": "Acessar como convidado",
+        "login": "Entrar com minha conta"
+    },
+    "auth": {
+        "login": {
+            "title": "Entrar",
+            "email": "Digite seu e-mail",
+            "password": "Digite sua senha",
+            "submit": "Confirmar login",
+            "no_account": "Não tem conta? Cadastre-se",
+            "error": "E-mail ou senha inválidos"
+        },
+        "register": {
+            "title": "Criar conta",
+            "name": "Digite seu nome",
+            "email": "Digite seu e-mail",
+            "password": "Digite uma senha de no mínimo 8 caracteres",
+            "vision_title": "Selecione seu nível de visão",
+            "vision": {
+                "mild": "Deficiência visual leve",
+                "moderate": "Deficiência visual moderada",
+                "severe": "Deficiência visual severa",
+                "blindness": "Cegueira",
+                "near": "Dificuldade de visão de perto",
+                "none": "Nenhuma deficiência visual"
+            },
+            "has_account": "Já tem conta? Entrar",
+            "error": "Não foi possível criar sua conta",
+            "success": "Conta criada com sucesso! Faça login para continuar."
+            }
+    }
+}

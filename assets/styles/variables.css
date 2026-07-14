@@ -1,0 +1,11 @@
+:root {
+    --font-family: 'Arial, sans-serif';
+    --border-style: 1px solid #bbb;
+    --stroke-color: #ccc;
+    --neutral-color: #fff;
+    --focus-border-style: 1px solid #FFD700;
+    --focus-background-color: #fffb00;
+    --high-contrast-text-color: #000000;
+    --high-contrast-button-bg: #002D62;
+    --high-contrast-button-border: 1px solid #001F44;
+  }

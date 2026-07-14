@@ -1,0 +1,48 @@
+{
+  "name": "nuxt-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint --ext .js,.ts,.vue .",
+    "lint:fix": "eslint --fix --ext .js,.ts,.vue .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@nuxtjs/device": "^3.2.4",
+    "@nuxtjs/i18n": "^8.5.1",
+    "@pinia/nuxt": "^0.5.4",
+    "@vee-validate/nuxt": "^4.13.2",
+    "@vee-validate/zod": "^4.13.2",
+    "@vueuse/components": "^11.1.0",
+    "@vueuse/core": "^11.0.3",
+    "@vueuse/nuxt": "^11.0.3",
+    "lodash": "^4.17.21",
+    "nuxt": "^3.13.0",
+    "nuxt-icons": "^3.2.1",
+    "pinia": "^2.2.2",
+    "ts-key-enum": "^3.0.13",
+    "uuid": "^10.0.0",
+    "vue": "latest",
+    "vue-draggable-resizable": "^3.0.0",
+    "vue-json-pretty": "^2.4.0",
+    "vuetify-nuxt-module": "^0.17.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^0.5.3",
+    "@nuxtjs/eslint-config-typescript": "^12.1.0",
+    "@pinia-plugin-persistedstate/nuxt": "^1.2.1",
+    "@types/uuid": "^10.0.0",
+    "babel-plugin-const-enum": "^1.2.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.3.3",
+    "sass-embedded": "^1.81.0"
+  }
+}
