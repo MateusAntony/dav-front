@@ -35,9 +35,14 @@ const options = ref([
 ]);
 const menu = useMenuOptions();
 const tts = useTTS();
-
-function handleBack() {
+const diagramTool = useDiagram();
+async function handleBack() {
   if (menu.activeMainMenu === PDVMenusEnum.PROJECTS) {
+    try {
+      await diagramTool.saveDiagram();
+    } catch (error) {
+      console.error('Erro ao salvar diagrama:', error);
+    }
     if (menu.previousDerMenu !== undefined) {
       menu.setActiveDerMenu(menu.previousDerMenu);
     } else {

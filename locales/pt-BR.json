@@ -3,7 +3,8 @@
         "main": {
             "title": "Menu principal",
             "options": {
-                "my_projects": "Projeto Exemplo",
+                "my_projects": "Meus projetos",
+                "example_project": "Projeto exemplo",
                 "tts_options": "Configuração da síntese de voz",
                 "language": "Idioma",
                 "help": "Ajuda"

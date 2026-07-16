@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
 
-import { diagramMock } from '~/mock/diagram.mock';
 import {
   CardinalityOptions,
   type DerAttribute,
@@ -19,6 +18,7 @@ import {
   type ParsedAttribute,
 } from '~/src/interfaces/der-diagram';
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
+import { diagramMock } from '~/mock/diagram.mock';
 
 let instance: any;
 
@@ -36,9 +36,51 @@ export function useDiagram() {
     //   /** TODO - Função de get diagram */
     // };
 
-    const loadDiagram = () => {
-      diagram.value = diagramMock;
+    const loadDiagram = async () => {
+      const { listDiagrams, createDiagram } = useDiagramsApi();
+      const authStore = useAuthStore();
+      console.log('LOG - token existe?', !!authStore.token);
+      if (!authStore.token) {
+        // Convidado: mantém o comportamento atual 
+        diagram.value = {
+          ...diagramMock,
+          id: uuidv4(),
+        };
+        parseDiagram();
+        return;
+      }
+
+      const diagrams = await listDiagrams();
+      console.log('LOG - diagramas encontrados:', diagrams);
+      if (diagrams.length > 0) {
+        const saved = diagrams[0];
+        diagram.value = JSON.parse(saved.serialized_object);
+        diagram.value.id = saved.id;
+      } else {
+        const created = await createDiagram(
+          'diagrama sem título',
+          JSON.stringify({ entities: [], relationships: [] }),
+        );
+        diagram.value = { id: created.id, name: created.name, entities: [], relationships: [] };
+      }
       parseDiagram();
+    };
+
+    const saveDiagram = async () => {
+      const authStore = useAuthStore();
+      const currentDiagram = diagram.value;
+      console.log('LOG - salvando diagrama:', currentDiagram);
+      if (!authStore.token || !currentDiagram) return;
+
+      const { updateDiagram } = useDiagramsApi();
+      const result = await updateDiagram(
+        currentDiagram.id,
+        JSON.stringify({
+          entities: currentDiagram.entities,
+          relationships: currentDiagram.relationships,
+        }),
+      );
+      console.log('LOG - resultado do salvamento:', result);
     };
 
     const parseDiagram = () => {
@@ -476,6 +518,7 @@ export function useDiagram() {
       readAllRelationships,
       readEntityAttrs,
       readRelationship,
+      saveDiagram,
       // updateDiagram,
       // deleteDiagram,
     };

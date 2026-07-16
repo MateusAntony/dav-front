@@ -7,12 +7,16 @@ export function useAuth() {
   }
 
   const login = async (email: string, password: string) => {
-    const res = await request<{ token: string; user: any }>('/auth/login', {
+    const { access_token } = await request<{ access_token: string }>('/auth/login', {
       method: 'POST',
       body: { email, password },
     })
-    authStore.setSession(res.token, res.user)
-    return res
+    authStore.setSession(access_token, null)
+
+    const user = await request('/users')
+    authStore.setSession(access_token, user)
+
+    return user
   }
 
   return { register, login }

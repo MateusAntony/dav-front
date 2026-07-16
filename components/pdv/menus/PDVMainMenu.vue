@@ -6,27 +6,27 @@ import { DerFlowEnum, PDVMenusEnum } from '~/src/interfaces/pdv-menu';
 
 const { t } = useI18n();
 const menuStore = useMenuOptions();
-const menu = ref();
+const authStore = useAuthStore();
 
-onBeforeMount(() => {
-  menu.value = {
-    title: t('menu.main.title'),
-    items: [
-      {
-        label: t('menu.main.options.my_projects'),
-        action: () => {
-          menuStore.setActiveMainMenu(PDVMenusEnum.PROJECTS);
-          menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT);
-        },
+const menu = ref({
+  title: t('menu.main.title'),
+  items: [
+    {
+      label: authStore.token
+        ? t('menu.main.options.my_projects')
+        : t('menu.main.options.example_project'),
+      action: () => {
+        menuStore.setActiveMainMenu(PDVMenusEnum.PROJECTS);
+        menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT);
       },
-      {
-        label: t('menu.main.options.tts_options'),
-        action: () => {
-          menuStore.setActiveMainMenu(PDVMenusEnum.TTS);
-        },
+    },
+    {
+      label: t('menu.main.options.tts_options'),
+      action: () => {
+        menuStore.setActiveMainMenu(PDVMenusEnum.TTS);
       },
-    ],
-  };
+    },
+  ],
 });
 </script>
 <style scoped lang="css">

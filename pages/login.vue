@@ -22,6 +22,7 @@
 <script setup lang="ts">
 const { t } = useI18n();
 const { login } = useAuth();
+const diagramTool = useDiagram();
 
 const email = ref('');
 const password = ref('');
@@ -31,6 +32,7 @@ const handleLogin = async () => {
   error.value = false;
   try {
     await login(email.value, password.value);
+    await diagramTool.loadDiagram();
     navigateTo(Routes.HOME);
   } catch (e) {
     error.value = true;

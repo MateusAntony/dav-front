@@ -17,7 +17,7 @@
       >
       <FocusableElement
         :title="t('welcome.guest')"
-        @click="navigateTo(Routes.HOME)"
+        @click="enterAsGuest"
       >
         {{ t('welcome.guest') }}
       </FocusableElement>
@@ -36,6 +36,14 @@ const { t } = useI18n();
 const initialFocus = ref();
 const welcomeElement = ref(null);
 const tts = useTTS();
+const authStore = useAuthStore();
+const diagramTool = useDiagram();
+
+const enterAsGuest = async () => {
+  authStore.logout();
+  await diagramTool.loadDiagram();
+  navigateTo(Routes.HOME);
+};
 
 const elements = [
   {
@@ -68,6 +76,8 @@ onMounted(async () => {
   await nextTick();
   initialFocus.value.focus();
 });
+
+
 </script>
 
 <style scoped>

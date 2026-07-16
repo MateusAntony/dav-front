@@ -5,7 +5,7 @@ export function useKeyboardNavigation() {
   const menuStore = useMenuOptions();
   const ttsStore = useTtsStore();
   const tts = useTTS();
-
+  const diagramTool = useDiagram();
   const updateFocusableElements = () => {
     focusableElements.value = Array.from(
       document.querySelectorAll(
@@ -40,6 +40,9 @@ export function useKeyboardNavigation() {
       event.preventDefault();
     } else if (event.code === 'Escape') {
       if (menuStore.activeMainMenu === PDVMenusEnum.PROJECTS) {
+        diagramTool.saveDiagram().catch((error: unknown) => {
+          console.error('Erro ao salvar diagrama:', error);
+        });
         if (menuStore.previousDerMenu !== undefined) {
           menuStore.setActiveDerMenu(menuStore.previousDerMenu);
         } else {
