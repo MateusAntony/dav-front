@@ -14,7 +14,9 @@
             "title": "Configuração da síntese de voz",
             "options": {
                 "increase": "Aumentar velocidade da fala",
-                "decrease": "Reduzir velocidade da fala"
+                "decrease": "Reduzir velocidade da fala",
+                "disable_voice": "Desativar leitura de voz",
+                "enable_voice": "Ativar leitura de voz"
             }
         },
         "projects": {
@@ -148,7 +150,10 @@
         "desktop_only": "Olá! Nosso sistema foi otimizado para uso em desktop, com navegação e funcionalidades específicas para teclado, garantindo uma experiência completa e eficiente. Para aproveitar todos os recursos, recomendamos acessar a plataforma em um computador. Agradecemos sua compreensão!",
         "empty_input": "A informação 'Nome' está em branco. Por favor, preencha para continuar.",
         "hide_assistant": "Ocultar Assistente",
-        "show_assistant": "Exibir Assistente"
+        "show_assistant": "Exibir Assistente",
+        "max_diagrams_reached": "Você já atingiu o limite de 3 diagramas. Exclua um diagrama existente para criar um novo.",
+        "voice_disabled": "Leitura de voz desativada.",
+        "voice_enabled": "Leitura de voz ativada."
     },
     "common": {
         "confirm": "Confirmar",

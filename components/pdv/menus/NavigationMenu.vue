@@ -15,10 +15,10 @@
 </template>
 
 <script setup lang="ts">
-import { PDVMenusEnum } from '~/src/interfaces/pdv-menu';
+import { DerFlowEnum, PDVMenusEnum } from '~/src/interfaces/pdv-menu';
 
 const { t } = useI18n();
-
+const authStore = useAuthStore();
 const options = ref([
   {
     title: t('common.back'),
@@ -43,7 +43,13 @@ async function handleBack() {
     } catch (error) {
       console.error('Erro ao salvar diagrama:', error);
     }
-    if (menu.previousDerMenu !== undefined) {
+    if (menu.activeDerMenu === DerFlowEnum.DEFAULT) {
+      if (authStore.token) {
+        menu.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
+      } else {
+        menu.setActiveMainMenu(PDVMenusEnum.DEFAULT);
+      }
+    } else if (menu.previousDerMenu !== undefined) {
       menu.setActiveDerMenu(menu.previousDerMenu);
     } else {
       menu.setActiveMainMenu(PDVMenusEnum.DEFAULT);
@@ -60,7 +66,7 @@ function handleStart() {
 }
 
 function handleHelp() {
-  tts.speakPhrase(t('message.navigation_helper'));
+  tts.speakPhrase(t('message.navigation_helper'),true);
 }
 </script>
 

@@ -24,12 +24,22 @@ export function useTTS() {
     voice.value = voices.find((v) => v.lang === 'pt-BR');
     const speech = useSpeechSynthesis(phrase, {
       voice,
-      rate: tts.speech.rate,
-    });
+      rate: tts.speech.rate/4, // Coloquei divido por 4 para funcionar no linux
+    }); 
     return speech;
   };
 
-  const speakPhrase = async (phrase: string) => {
+  const toggleVoice = () => {
+    tts.toggleEnabled();
+    speakPhrase(
+      t(tts.enabled ? 'message.voice_enabled' : 'message.voice_disabled'),
+      true,
+    );
+  };
+
+  const speakPhrase = async (phrase: string, force = false) => {
+    if (!tts.enabled && !force) return;
+
     if (!voicesReady.value) await loadVoices();
 
     stopSpeaking();
@@ -56,5 +66,7 @@ export function useTTS() {
     speakPhrase,
     updateTTSPreferences,
     stopSpeaking,
+    isVoiceEnabled: computed(() => tts.enabled),
+    toggleVoice,
   };
 }

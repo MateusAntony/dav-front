@@ -18,6 +18,8 @@ export interface Menu {
 
 export enum DerFlowEnum {
   DEFAULT,
+  DIAGRAM_LIST, 
+  NEW_DIAGRAM,
   ENTITIES,
   ENTITY_OPTIONS,
   DELETE_ENTITY,
@@ -36,7 +38,9 @@ export const previousDerMenuMapping: Record<
   DerFlowEnum,
   DerFlowEnum | undefined
 > = {
-  [DerFlowEnum.DEFAULT]: undefined,
+  [DerFlowEnum.DEFAULT]: undefined, 
+  [DerFlowEnum.DIAGRAM_LIST]: undefined,
+  [DerFlowEnum.NEW_DIAGRAM]: DerFlowEnum.DIAGRAM_LIST,
   [DerFlowEnum.ENTITIES]: DerFlowEnum.DEFAULT,
   [DerFlowEnum.ENTITY_OPTIONS]: DerFlowEnum.ENTITIES,
   [DerFlowEnum.DELETE_ENTITY]: DerFlowEnum.ENTITY_OPTIONS,

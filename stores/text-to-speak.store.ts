@@ -7,12 +7,14 @@ export const useTtsStore = defineStore('tts', {
     speech: SpeechPreferences;
     history: string[];
     hasUserInteracted: boolean;
+    enabled: boolean;
   } => ({
     speech: {
       rate: 4,
     },
     history: [],
     hasUserInteracted: false,
+    enabled: true,
   }),
   actions: {
     addPhraseToHistory(phrase: string) {
@@ -27,8 +29,14 @@ export const useTtsStore = defineStore('tts', {
     setUserInteracted() {
       this.hasUserInteracted = true;
     },
+    setEnabled(enabled: boolean) {
+      this.enabled = enabled;
+    },
+    toggleEnabled() {
+      this.enabled = !this.enabled;
+    },
   },
   persist: {
-    paths: ['speech'],
+    paths: ['speech', 'enabled'],
   },
 });

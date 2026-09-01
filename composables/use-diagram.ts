@@ -29,6 +29,8 @@ export function useDiagram() {
   const i18n = useI18n();
 
   if (!instance) {
+    const diagramsList = ref<{ id: string; name: string }[]>([]);
+    const MAX_DIAGRAMS = 3;
     const diagram = ref<Diagram | null>(null);
     const parsedDiagram = ref<ParsedDiagram | null>(null);
 
@@ -83,6 +85,70 @@ export function useDiagram() {
       console.log('LOG - resultado do salvamento:', result);
     };
 
+
+    const listUserDiagrams = async () => {
+      const { listDiagrams } = useDiagramsApi();
+      const diagrams = await listDiagrams();
+      diagramsList.value = diagrams.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+      }));
+      return diagramsList.value;
+    };
+
+    const initDiagrams = async () => {
+      const authStore = useAuthStore();
+      if (!authStore.token) {
+        await loadDiagram();
+        menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
+        return;
+      }
+      await listUserDiagrams();
+      if (diagramsList.value.length === 0) {
+        menu.setActiveDerMenu(DerFlowEnum.NEW_DIAGRAM);
+      } else {
+        menu.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
+      }
+    };
+
+    const selectDiagram = async (id: string) => {
+      const { getDiagram } = useDiagramsApi();
+      const saved = await getDiagram(id);
+      const content = saved.serialized_object
+        ? JSON.parse(saved.serialized_object)
+        : { entities: [], relationships: [] };
+      diagram.value = {
+        id: saved.id,
+        name: saved.name,
+        entities: content.entities ?? [],
+        relationships: content.relationships ?? [],
+      };
+      parseDiagram();
+      menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
+    };
+
+    const createNewDiagram = async (name: string) => {
+      if (diagramsList.value.length >= MAX_DIAGRAMS) {
+        tts.speakPhrase(i18n.t('message.max_diagrams_reached'));
+        return;
+      }
+      const { createDiagram } = useDiagramsApi();
+      const created = await createDiagram(
+        name,
+        JSON.stringify({ entities: [], relationships: [] }),
+      );
+      diagramsList.value.push({ id: created.id, name: created.name });
+      diagram.value = {
+        id: created.id,
+        name: created.name,
+        entities: [],
+        relationships: [],
+      };
+      parseDiagram();
+      menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
+    };
+
+    
     const parseDiagram = () => {
       if (diagram.value) {
         parsedDiagram.value = {
@@ -519,6 +585,11 @@ export function useDiagram() {
       readEntityAttrs,
       readRelationship,
       saveDiagram,
+      diagramsList,
+      listUserDiagrams,
+      initDiagrams,
+      selectDiagram,
+      createNewDiagram,
       // updateDiagram,
       // deleteDiagram,
     };

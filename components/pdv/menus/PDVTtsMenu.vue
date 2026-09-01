@@ -6,10 +6,19 @@ const { t } = useI18n();
 const menu = ref();
 const tts = useTTS();
 
-onBeforeMount(() => {
+function buildMenu() {
   menu.value = {
     title: t('menu.tts.title'),
     items: [
+      {
+        label: tts.isVoiceEnabled.value
+          ? t('menu.tts.options.disable_voice')
+          : t('menu.tts.options.enable_voice'),
+        action: () => {
+          tts.toggleVoice();
+          buildMenu();
+        },
+      },
       {
         label: t('menu.tts.options.increase'),
         action: () => {
@@ -24,5 +33,7 @@ onBeforeMount(() => {
       },
     ],
   };
-});
+}
+
+onBeforeMount(buildMenu);
 </script>

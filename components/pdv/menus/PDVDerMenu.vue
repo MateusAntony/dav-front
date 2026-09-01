@@ -1,5 +1,11 @@
 <template>
-  <PDVDerDefaulMenu v-if="menuStore.activeDerMenu === DerFlowEnum.DEFAULT" />
+  <PDVDiagramsList
+    v-if="menuStore.activeDerMenu === DerFlowEnum.DIAGRAM_LIST"
+  />
+  <PDVCreateDiagram
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.NEW_DIAGRAM"
+  />
+  <PDVDerDefaulMenu v-else-if="menuStore.activeDerMenu === DerFlowEnum.DEFAULT" />
   <PDVDerEntities
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.ENTITIES"
   />
@@ -43,7 +49,7 @@ const diagramTool = useDiagram();
 const menuStore = useMenuOptions();
 
 onBeforeMount(() => {
-  diagramTool.loadDiagram();
+  diagramTool.initDiagrams();
 });
 </script>
 <style scoped lang="css">

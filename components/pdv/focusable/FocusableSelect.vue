@@ -51,7 +51,7 @@ const emit = defineEmits(['submit']);
 const readInfoText = (event: KeyboardEvent, infoText: string) => {
   if (event.key === 'F1' && helpFlag) {
     event.preventDefault();
-    tts.speakPhrase(infoText);
+    tts.speakPhrase(infoText, true);
   }
 };
 

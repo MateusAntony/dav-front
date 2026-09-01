@@ -12,7 +12,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="item in menu.items" :key="item.label" class="menu-item">
+        <tr v-for="(item, index) in menu.items" :key="index" class="menu-item">
           <td colspan="2">
             <FocusableElement
               :title="item.label"
@@ -47,7 +47,8 @@ const tableTitle = ref();
 const readInfoText = (event: KeyboardEvent, infoText: string) => {
   if (event.key === 'F1' && infoText) {
     event.preventDefault();
-    tts.speakPhrase(infoText);
+    tts.speakPhrase(infoText, true);
+    
   }
 };
 
