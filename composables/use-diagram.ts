@@ -29,10 +29,13 @@ export function useDiagram() {
   const i18n = useI18n();
 
   if (!instance) {
-    const diagramsList = ref<{ id: string; name: string }[]>([]);
+    const diagramsList = ref<
+      { id: string; name: string; is_owner: boolean }[]
+    >([]);
     const MAX_DIAGRAMS = 3;
     const diagram = ref<Diagram | null>(null);
     const parsedDiagram = ref<ParsedDiagram | null>(null);
+    const isReadOnly = ref(false);
 
     // const loadDiagram = (diagramId: string) => {
     //   /** TODO - Função de get diagram */
@@ -58,6 +61,7 @@ export function useDiagram() {
         const saved = diagrams[0];
         diagram.value = JSON.parse(saved.serialized_object);
         diagram.value.id = saved.id;
+        isReadOnly.value = !saved.is_owner;
       } else {
         const created = await createDiagram(
           'diagrama sem título',
@@ -72,7 +76,7 @@ export function useDiagram() {
       const authStore = useAuthStore();
       const currentDiagram = diagram.value;
       console.log('LOG - salvando diagrama:', currentDiagram);
-      if (!authStore.token || !currentDiagram) return;
+      if (!authStore.token || !currentDiagram || isReadOnly.value) return;
 
       const { updateDiagram } = useDiagramsApi();
       const result = await updateDiagram(
@@ -92,6 +96,7 @@ export function useDiagram() {
       diagramsList.value = diagrams.map((d: any) => ({
         id: d.id,
         name: d.name,
+        is_owner: d.is_owner,
       }));
       return diagramsList.value;
     };
@@ -104,7 +109,12 @@ export function useDiagram() {
         return;
       }
       await listUserDiagrams();
-      if (diagramsList.value.length === 0) {
+      if (menu.diagramListMode === 'shared') {
+        menu.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
+        return;
+      }
+      const ownDiagrams = diagramsList.value.filter((d) => d.is_owner);
+      if (ownDiagrams.length === 0) {
         menu.setActiveDerMenu(DerFlowEnum.NEW_DIAGRAM);
       } else {
         menu.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
@@ -123,12 +133,14 @@ export function useDiagram() {
         entities: content.entities ?? [],
         relationships: content.relationships ?? [],
       };
+      isReadOnly.value = !saved.is_owner;
       parseDiagram();
       menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
     };
 
     const createNewDiagram = async (name: string) => {
-      if (diagramsList.value.length >= MAX_DIAGRAMS) {
+      const ownCount = diagramsList.value.filter((d) => d.is_owner).length;
+      if (ownCount >= MAX_DIAGRAMS) {
         tts.speakPhrase(i18n.t('message.max_diagrams_reached'));
         return;
       }
@@ -137,13 +149,18 @@ export function useDiagram() {
         name,
         JSON.stringify({ entities: [], relationships: [] }),
       );
-      diagramsList.value.push({ id: created.id, name: created.name });
+      diagramsList.value.push({
+        id: created.id,
+        name: created.name,
+        is_owner: true,
+      });
       diagram.value = {
         id: created.id,
         name: created.name,
         entities: [],
         relationships: [],
       };
+      isReadOnly.value = false;
       parseDiagram();
       menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
     };
@@ -252,6 +269,67 @@ export function useDiagram() {
       if (entity) {
         entity.position = { ...position };
       }
+    };
+
+    // Layout em grade: cada entidade/relacionamento ocupa uma célula de
+    // tamanho fixo, em ordem. Escolhido no lugar de um layout "flui e
+    // mede o elemento anterior" porque é determinístico — sempre produz
+    // o mesmo resultado organizado, independente de quando o navegador
+    // termina de desenhar cada elemento (a causa da bagunça anterior).
+    const GRID_CARD_WIDTH = 260;
+    const GRID_CARD_HEIGHT = 190;
+    const GRID_GAP = 32;
+
+    const gridPositionFor = (
+      index: number,
+      containerWidth: number,
+    ): DiagramPosition => {
+      const columns = Math.max(
+        1,
+        Math.floor(
+          (containerWidth + GRID_GAP) / (GRID_CARD_WIDTH + GRID_GAP),
+        ),
+      );
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      return {
+        x: GRID_GAP + col * (GRID_CARD_WIDTH + GRID_GAP),
+        y: GRID_GAP + row * (GRID_CARD_HEIGHT + GRID_GAP),
+      };
+    };
+
+    // Recalcula a posição de quem ainda não tem posição própria
+    // (x/y nulos) — preserva o que o usuário já arrastou manualmente.
+    // Passe force=true para recalcular TUDO (usado pelo botão
+    // "Reorganizar diagrama automaticamente").
+    const reorganizeDiagram = (force = false) => {
+      if (!diagram.value || !process.client) return;
+
+      const containerWidth = window.innerWidth * 0.85;
+      let index = 0;
+
+      diagram.value.entities.forEach((entity) => {
+        const needsPosition =
+          force || entity.position?.x === null || entity.position?.y === null;
+        if (needsPosition) {
+          updateEntityPosition(entity.id, gridPositionFor(index, containerWidth));
+        }
+        index += 1;
+      });
+
+      diagram.value.relationships.forEach((relationship) => {
+        const needsPosition =
+          force ||
+          relationship.position?.x === null ||
+          relationship.position?.y === null;
+        if (needsPosition) {
+          updateRelationshipPosition(
+            relationship.id,
+            gridPositionFor(index, containerWidth),
+          );
+        }
+        index += 1;
+      });
     };
 
     const getEntity = (parsed?: boolean) => {
@@ -562,6 +640,7 @@ export function useDiagram() {
     instance = {
       diagram,
       parsedDiagram,
+      isReadOnly,
       createDiagram,
       parseDiagram,
       createEntity,
@@ -572,6 +651,7 @@ export function useDiagram() {
       createRelationship,
       editRelationship,
       updateRelationshipPosition,
+      reorganizeDiagram,
       removeRelationship,
       getRelationship,
       createAttribute,

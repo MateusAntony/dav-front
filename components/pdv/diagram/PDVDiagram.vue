@@ -1,5 +1,5 @@
 <template>
-  <div ref="diagramContainer" class="diagram">
+  <div ref="diagramContainer" class="diagram printable-diagram">
     <svg ref="svgContainer" class="diagram-lines">
       <text
         v-for="cardinality in cardinalities"
@@ -32,6 +32,7 @@
       :w="'auto'"
       :h="'auto'"
       :disable-user-select="true"
+      :draggable="!diagramTool.isReadOnly.value"
       class="draggable"
       @drag-stop="
         (...event) => handleRelationshipDragStop(relationship.id, event)
@@ -51,6 +52,7 @@
       :w="'auto'"
       :h="'auto'"
       :disable-user-select="true"
+      :draggable="!diagramTool.isReadOnly.value"
       class="draggable"
       @drag-stop="(...event) => handleEntityDragStop(entity.id, event)"
       @dragging="calculateLinePosition"
@@ -63,9 +65,7 @@
 <script setup lang="ts">
 import {
   CardinalityOptions,
-  type DerEntity,
   type DerRelationship,
-  type DiagramPosition,
 } from '~/src/interfaces/der-diagram';
 
 interface Line {
@@ -87,24 +87,6 @@ const diagramContainer = ref(null);
 const diagramTool = useDiagram();
 const lines = reactive<Line[]>([]);
 const cardinalities = reactive<CardinalityLabel[]>([]);
-
-let entitiesLength = 0;
-let relationshipsLength = 0;
-let lastElementId: string;
-const spacing = 16;
-let actualY = spacing;
-let actualX = spacing;
-
-const calculateEntityPosition = (entity: DerEntity) => {
-  calculatePositionForElement(entity, diagramTool.updateEntityPosition);
-};
-
-const calculateRelationshipPosition = (relationship: DerRelationship) => {
-  calculatePositionForElement(
-    relationship,
-    diagramTool.updateRelationshipPosition,
-  );
-};
 
 const calculateLinePosition = () => {
   lines.length = 0;
@@ -190,91 +172,50 @@ const calculateLinePosition = () => {
   );
 };
 
-const calculatePositionForElement = (
-  element: DerEntity | DerRelationship,
-  updateFn: (id: string, pos: DiagramPosition) => void,
-) => {
-  const newPosition = calculatePosition(element.position);
-  lastElementId = element.id;
-  if (newPosition !== element.position) {
-    updateFn(element.id, newPosition);
-  }
-};
-
-const calculatePosition = (position: DiagramPosition): DiagramPosition => {
-  const currentPos = position;
-  const containerRect = diagramContainer.value?.getBoundingClientRect();
-  if (currentPos?.x !== null && currentPos?.y !== null) {
-    return position;
-  }
-
-  if (lastElementId) {
-    const previousElement = document.getElementById(lastElementId);
-    if (previousElement) {
-      const previousElementWidth =
-        previousElement.getBoundingClientRect().width;
-      actualX = actualX + (previousElementWidth ?? 0) + spacing * 8;
-    }
-
-    if (shouldStartNewLine(containerRect.width)) {
-      actualX = spacing;
-      actualY = actualY + spacing * 15;
-    }
-  }
-
-  return {
-    x: actualX,
-    y: actualY,
-  };
-};
-
-const shouldStartNewLine = (containerWidth: number): boolean => {
-  return actualX + 250 > containerWidth;
-};
-
 const handleEntityDragStop = (id: string, position: number[]) => {
+  if (diagramTool.isReadOnly.value) return;
   diagramTool.updateEntityPosition(id, { x: position[0], y: position[1] });
 };
 
 const handleRelationshipDragStop = (id: string, position: number[]) => {
+  if (diagramTool.isReadOnly.value) return;
   diagramTool.updateRelationshipPosition(id, {
     x: position[0],
     y: position[1],
   });
 };
 
+// Reorganiza sempre que: o diagrama carrega pela primeira vez, o
+// usuário troca de diagrama (o "id" muda), ou uma entidade/relação
+// nova é criada. Só preenche quem ainda não tem posição própria — quem
+// o usuário já arrastou manualmente não é movido.
+watch(
+  () => diagramTool.diagram.value?.id,
+  async () => {
+    await nextTick();
+    diagramTool.reorganizeDiagram();
+    await nextTick();
+    calculateLinePosition();
+  },
+);
+
 watch(
   () => ({
-    entities: diagramTool.diagram.value?.entities,
-    relationships: diagramTool.diagram.value?.relationships,
+    entityCount: diagramTool.diagram.value?.entities.length,
+    relationshipCount: diagramTool.diagram.value?.relationships.length,
   }),
-  async ({ entities, relationships }) => {
-    if (entities && entities?.length > entitiesLength) {
-      calculateEntityPosition(entities[entities.length - 1] as DerEntity);
-      entitiesLength = entities.length;
-    }
-    if (relationships && relationships?.length > relationshipsLength) {
-      calculateRelationshipPosition(
-        relationships[relationships.length - 1] as DerRelationship,
-      );
-      relationshipsLength = relationships.length;
-    }
-    calculateLinePosition();
+  async () => {
     await nextTick();
+    diagramTool.reorganizeDiagram();
+    await nextTick();
+    calculateLinePosition();
   },
   { deep: true },
 );
 
 onMounted(async () => {
-  const diagram = diagramTool.diagram.value;
-  entitiesLength = diagram?.entities.length ?? 0;
-  relationshipsLength = diagram?.relationships.length ?? 0;
-  diagram?.entities.forEach((e) => {
-    calculateEntityPosition(e as DerEntity);
-  });
-  diagram?.relationships.forEach((r) => {
-    calculateRelationshipPosition(r as DerRelationship);
-  });
+  await nextTick();
+  diagramTool.reorganizeDiagram();
   await nextTick();
   calculateLinePosition();
 });
