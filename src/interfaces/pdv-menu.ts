@@ -29,9 +29,12 @@ export enum DerFlowEnum {
   RELATIONSHIPS,
   RELATIONSHIP_OPTIONS,
   DELETE_RELATIONSHIP,
+  SQL_GENERATOR,
+  SQL_TABLE_DETAIL,
   NEW_ENTITY,
   NEW_ATTR,
   NEW_RELATIONSHIP,
+  SHARE_DIAGRAM,
 }
 
 export const previousDerMenuMapping: Record<
@@ -50,7 +53,10 @@ export const previousDerMenuMapping: Record<
   [DerFlowEnum.RELATIONSHIPS]: DerFlowEnum.DEFAULT,
   [DerFlowEnum.RELATIONSHIP_OPTIONS]: DerFlowEnum.RELATIONSHIPS,
   [DerFlowEnum.DELETE_RELATIONSHIP]: DerFlowEnum.RELATIONSHIP_OPTIONS,
+  [DerFlowEnum.SQL_GENERATOR]: DerFlowEnum.DEFAULT,
+  [DerFlowEnum.SQL_TABLE_DETAIL]: DerFlowEnum.SQL_GENERATOR,
   [DerFlowEnum.NEW_ENTITY]: DerFlowEnum.DEFAULT,
   [DerFlowEnum.NEW_ATTR]: DerFlowEnum.ENTITY_OPTIONS,
   [DerFlowEnum.NEW_RELATIONSHIP]: DerFlowEnum.DEFAULT,
+  [DerFlowEnum.SHARE_DIAGRAM]: DerFlowEnum.DEFAULT,
 };

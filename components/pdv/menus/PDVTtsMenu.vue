@@ -5,6 +5,7 @@
 const { t } = useI18n();
 const menu = ref();
 const tts = useTTS();
+const voiceNav = useVoiceNavigation();
 
 function buildMenu() {
   menu.value = {
@@ -30,6 +31,17 @@ function buildMenu() {
         action: () => {
           tts.updateTTSPreferences(false);
         },
+      },
+      {
+        label: voiceNav.isListening.value
+          ? 'Desativar navegação por comandos de voz'
+          : 'Ativar navegação por comandos de voz',
+        action: () => {
+          voiceNav.toggle();
+          buildMenu();
+        },
+        infoText:
+          'Depois de ativar, diga próximo, anterior, selecionar, ajuda, voltar, início, ou parar.',
       },
     ],
   };

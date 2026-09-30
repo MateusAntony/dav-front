@@ -1,6 +1,13 @@
 import { PDVMenusEnum } from '~/src/interfaces/pdv-menu';
 
-export function useKeyboardNavigation() {
+// Singleton: precisa ser criado UMA vez só, durante o setup() do
+// app.vue (onde useTTS()/useI18n() podem ser chamados com segurança).
+// Se cada chamador criasse sua própria instância — como a navegação
+// por voz fazia antes —, useTTS() seria invocado fora do setup() e
+// quebraria. Reaproveitar a mesma instância resolve isso de vez.
+let instance: ReturnType<typeof createKeyboardNavigation> | null = null;
+
+function createKeyboardNavigation() {
   const focusableElements = ref<HTMLElement[]>([]);
   const menuStore = useMenuOptions();
   const ttsStore = useTtsStore();
@@ -9,9 +16,31 @@ export function useKeyboardNavigation() {
   const updateFocusableElements = () => {
     focusableElements.value = Array.from(
       document.querySelectorAll(
-        '.focusable-input, .focusable-element, .focusable-select, [tabindex]:not([tabindex="-1"])',
+        '.focusable-input, .focusable-textarea, .focusable-element, .focusable-select, [tabindex]:not([tabindex="-1"])',
       ),
     ) as HTMLElement[];
+  };
+
+  // Move o foco pro próximo/anterior item focável. Usada tanto pelo
+  // teclado físico (dentro de hotkeys) quanto pelos comandos de voz
+  // "próximo"/"anterior" (chamada direta, sem passar pelo bloqueio de
+  // teclado que existe enquanto a navegação por voz está ativa).
+  const moveFocus = (direction: 'up' | 'down') => {
+    updateFocusableElements();
+    ttsStore.setUserInteracted();
+
+    const currentIndex = focusableElements.value.findIndex(
+      (el) => el === document.activeElement,
+    );
+    focusableElements.value.forEach((el, index) => {
+      (el as HTMLElement).tabIndex = index + 1;
+    });
+
+    const nextIndex =
+      direction === 'down'
+        ? getNextIndex(currentIndex, focusableElements.value.length)
+        : getPrevIndex(currentIndex, focusableElements.value.length);
+    focusableElements.value[nextIndex]?.focus();
   };
 
   const hotkeys = (event: KeyboardEvent) => {
@@ -24,14 +53,16 @@ export function useKeyboardNavigation() {
     focusableElements.value.forEach((el, index) => {
       (el as HTMLElement).tabIndex = index + 1;
     });
-    if (event.code === 'ArrowUp' || (event.code === 'Tab' && event.shiftKey)) {
+    const isTextEntry = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+
+    if (!isTextEntry && (event.code === 'ArrowUp' || (event.code === 'Tab' && event.shiftKey))) {
       const prevIndex = getPrevIndex(
         currentIndex,
         focusableElements.value.length,
       );
       focusableElements.value[prevIndex]?.focus();
       event.preventDefault();
-    } else if (event.code === 'ArrowDown') {
+    } else if (!isTextEntry && event.code === 'ArrowDown') {
       const nextIndex = getNextIndex(
         currentIndex,
         focusableElements.value.length,
@@ -71,5 +102,12 @@ export function useKeyboardNavigation() {
     return currentIndex === length - 1 ? 0 : currentIndex + 1;
   }
 
-  return { hotkeys };
+  return { hotkeys, moveFocus };
+}
+
+export function useKeyboardNavigation() {
+  if (!instance) {
+    instance = createKeyboardNavigation();
+  }
+  return instance;
 }

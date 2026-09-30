@@ -3,7 +3,10 @@
     v-if="menuStore.activeDerMenu === DerFlowEnum.DIAGRAM_LIST"
   />
   <PDVCreateDiagram
-    v-else-if="menuStore.activeDerMenu === DerFlowEnum.NEW_DIAGRAM"
+    v-else-if="
+      menuStore.activeDerMenu === DerFlowEnum.NEW_DIAGRAM &&
+      menuStore.diagramListMode !== 'shared'
+    "
   />
   <PDVDerDefaulMenu v-else-if="menuStore.activeDerMenu === DerFlowEnum.DEFAULT" />
   <PDVDerEntities
@@ -39,6 +42,15 @@
   />
   <PDVCreateRelationship
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.NEW_RELATIONSHIP"
+  />
+  <PDVSqlGenerator
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_GENERATOR"
+  />
+  <PDVSqlTableDetail
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL"
+  />
+  <PDVShareDiagram
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.SHARE_DIAGRAM"
   />
 </template>
 <script setup lang="ts">

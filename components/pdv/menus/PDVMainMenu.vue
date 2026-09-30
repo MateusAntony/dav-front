@@ -16,10 +16,23 @@ const menu = ref({
         ? t('menu.main.options.my_projects')
         : t('menu.main.options.example_project'),
       action: () => {
+        menuStore.setDiagramListMode('own');
         menuStore.setActiveMainMenu(PDVMenusEnum.PROJECTS);
         menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT);
       },
     },
+    ...(authStore.token
+      ? [
+          {
+            label: 'Projetos compartilhados',
+            action: () => {
+              menuStore.setDiagramListMode('shared');
+              menuStore.setActiveMainMenu(PDVMenusEnum.PROJECTS);
+              menuStore.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
+            },
+          },
+        ]
+      : []),
     {
       label: t('menu.main.options.tts_options'),
       action: () => {

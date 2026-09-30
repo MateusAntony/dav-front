@@ -15,10 +15,20 @@
       <PDVTtsHistory class="assistant-item" />
     </div>
   </div>
-  <PDVDiagram v-if="diagramTool.diagram.value" />
+  <PDVSqlCodeView
+    v-if="
+      diagramTool.diagram.value &&
+      (menuStore.activeDerMenu === DerFlowEnum.SQL_GENERATOR ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL)
+    "
+  />
+  <PDVDiagram v-else-if="diagramTool.diagram.value" />
 </template>
 <script setup lang="ts">
+import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
+
 const diagramTool = useDiagram();
+const menuStore = useMenuOptions();
 const showTAM = ref(true);
 </script>
 <style scoped scss>

@@ -9,11 +9,14 @@ export enum FormScope {
   EDIT,
 }
 
+export type DiagramListMode = 'own' | 'shared';
+
 interface MenuOptions {
   activeMainMenu: PDVMenusEnum;
   activeDerMenu: DerFlowEnum;
   previousDerMenu?: DerFlowEnum;
   scope: FormScope;
+  diagramListMode: DiagramListMode;
 }
 
 export const useMenuOptions = defineStore('menu', {
@@ -22,6 +25,7 @@ export const useMenuOptions = defineStore('menu', {
     activeDerMenu: DerFlowEnum.DEFAULT,
     previousDerMenu: undefined,
     scope: FormScope.CREATE,
+    diagramListMode: 'own',
   }),
   actions: {
     setActiveMainMenu(menu: PDVMenusEnum) {
@@ -36,6 +40,9 @@ export const useMenuOptions = defineStore('menu', {
     },
     setScope(scope: FormScope) {
       this.scope = scope;
+    },
+    setDiagramListMode(mode: DiagramListMode) {
+      this.diagramListMode = mode;
     },
     isEditScope() {
       return this.scope === FormScope.EDIT;

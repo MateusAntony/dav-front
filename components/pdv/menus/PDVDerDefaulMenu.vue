@@ -18,6 +18,9 @@ onBeforeMount(() => {
       project: diagramTool.diagram.value?.name,
     }),
     items: [
+      ...(diagramTool.isReadOnly.value
+        ? [{ label: 'Este diagrama foi compartilhado com você somente para leitura.', action: () => {} }]
+        : [
       {
         label: t('menu.der_flow.options.entity.create'),
         action: () => {
@@ -71,6 +74,30 @@ onBeforeMount(() => {
           }
         },
       },
+      {
+        label: t('menu.der_flow.options.diagram.generate_sql'),
+        action: () => {
+          if (hasEntities()) {
+            menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
+          }
+        },
+        infoText: t('message.sql_generator_helper'),
+      },
+      {
+        label: 'Compartilhar diagrama',
+        action: () => menuStore.setActiveDerMenu(DerFlowEnum.SHARE_DIAGRAM),
+        infoText: 'Convide outro usuário para visualizar o diagrama ou exporte em PDF.',
+      },
+      {
+        label: 'Reorganizar diagrama automaticamente',
+        action: () => {
+          diagramTool.reorganizeDiagram(true);
+          tts.speakPhrase('Diagrama reorganizado.');
+        },
+        infoText:
+          'Reposiciona todas as entidades e relacionamentos em uma grade organizada, desfazendo qualquer posição manual anterior.',
+      },
+        ]),
     ],
   };
 });

@@ -49,6 +49,38 @@ export function useTTS() {
     tts.addPhraseToHistory(phrase);
   };
 
+  // Fala uma lista de frases em sequência, uma depois da outra, sem cortar
+  // a anterior no meio (necessário para "ouvir tabela inteira"/"ouvir tudo").
+  const speakSequence = async (phrases: string[], force = false) => {
+    if (!tts.enabled && !force) return;
+    if (!voicesReady.value) await loadVoices();
+
+    stopSpeaking();
+
+    const voices = speechSynthesis.getVoices();
+    const selectedVoice = voices.find((v) => v.lang === 'pt-BR');
+
+    return new Promise<void>((resolve) => {
+      let index = 0;
+      const speakNext = () => {
+        if (index >= phrases.length) {
+          resolve();
+          return;
+        }
+        const phrase = phrases[index];
+        index += 1;
+        const utterance = new SpeechSynthesisUtterance(phrase);
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.rate = tts.speech.rate / 4;
+        utterance.onend = speakNext;
+        utterance.onerror = speakNext;
+        tts.addPhraseToHistory(phrase);
+        speechSynthesis.speak(utterance);
+      };
+      speakNext();
+    });
+  };
+
   const updateTTSPreferences = (increase: boolean) => {
     tts.setRate(increase ? tts.speech.rate + 2 : tts.speech.rate - 2);
     speakPhrase(t('message.speech_rate_test', { rate: tts.speech.rate / 2 }));
@@ -64,6 +96,7 @@ export function useTTS() {
     voicesReady,
     loadVoices,
     speakPhrase,
+    speakSequence,
     updateTTSPreferences,
     stopSpeaking,
     isVoiceEnabled: computed(() => tts.enabled),

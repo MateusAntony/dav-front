@@ -5,6 +5,7 @@
         v-for="(option, index) in options"
         :key="index"
         :title="option.title"
+        :data-nav="option.nav"
         class="option"
         @click="option.action"
       >
@@ -23,14 +24,17 @@ const options = ref([
   {
     title: t('common.back'),
     action: handleBack,
+    nav: 'back',
   },
   {
     title: t('common.home'),
     action: handleStart,
+    nav: 'home',
   },
   {
     title: t('common.help'),
     action: handleHelp,
+    nav: 'help',
   },
 ]);
 const menu = useMenuOptions();
