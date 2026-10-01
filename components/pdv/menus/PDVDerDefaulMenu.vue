@@ -13,92 +13,121 @@ const tts = useTTS();
 const menu = ref();
 
 onBeforeMount(() => {
+  const readOnly = diagramTool.isReadOnly.value;
+
+  // --- Opções de LEITURA (disponíveis para todos, inclusive leitores) -----
+  const navigateEntities = {
+    label: t('menu.der_flow.options.entity.navigate'),
+    action: () => {
+      if (hasEntities()) {
+        menuStore.setActiveDerMenu(DerFlowEnum.ENTITIES);
+      }
+    },
+  };
+  const readEntities = {
+    label: t('menu.der_flow.options.entity.read'),
+    action: () => {
+      if (hasEntities()) {
+        diagramTool.readAllEntities();
+      }
+    },
+  };
+  const navigateRelationships = {
+    label: t('menu.der_flow.options.relationship.navigate'),
+    action: () => {
+      if (hasRelationships()) {
+        menuStore.setActiveDerMenu(DerFlowEnum.RELATIONSHIPS);
+      }
+    },
+  };
+  const readRelationships = {
+    label: t('menu.der_flow.options.relationship.read'),
+    action: () => {
+      if (hasRelationships()) {
+        diagramTool.readAllRelationships();
+      }
+    },
+  };
+  const readDiagram = {
+    label: t('menu.der_flow.options.diagram.read'),
+    action: () => {
+      if (hasEntities()) {
+        diagramTool.readDiagram();
+      }
+    },
+  };
+  const generateSql = {
+    label: t('menu.der_flow.options.diagram.generate_sql'),
+    action: () => {
+      if (hasEntities()) {
+        menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
+      }
+    },
+    infoText: t('message.sql_generator_helper'),
+  };
+  const reorganize = {
+    label: 'Reorganizar diagrama automaticamente',
+    action: () => {
+      diagramTool.reorganizeDiagram(true);
+      tts.speakPhrase('Diagrama reorganizado.');
+    },
+    infoText: readOnly
+      ? 'Reposiciona as entidades e relacionamentos para facilitar a visualização. Como você só tem acesso de leitura, a nova organização vale apenas para você e não é salva.'
+      : 'Reposiciona todas as entidades e relacionamentos de forma organizada, mantendo entidades ligadas por relacionamentos próximas, e desfazendo qualquer posição manual anterior.',
+  };
+
+  // --- Opções de EDIÇÃO (somente para o dono do diagrama) -----------------
+  const createEntity = {
+    label: t('menu.der_flow.options.entity.create'),
+    action: () => {
+      menuStore.setActiveDerMenu(DerFlowEnum.NEW_ENTITY);
+      menuStore.setScope(FormScope.CREATE);
+    },
+    infoText: t('der.explanation.entity'),
+  };
+  const createRelationship = {
+    label: t('menu.der_flow.options.relationship.create'),
+    action: createRelationships,
+    infoText: t('der.explanation.relationship'),
+  };
+  const share = {
+    label: 'Compartilhar diagrama',
+    action: () => menuStore.setActiveDerMenu(DerFlowEnum.SHARE_DIAGRAM),
+    infoText:
+      'Convide outro usuário para visualizar o diagrama ou exporte em PDF.',
+  };
+
   menu.value = {
     title: t('menu.der_flow.titles.default', {
       project: diagramTool.diagram.value?.name,
     }),
-    items: [
-      ...(diagramTool.isReadOnly.value
-        ? [{ label: 'Este diagrama foi compartilhado com você somente para leitura.', action: () => {} }]
-        : [
-      {
-        label: t('menu.der_flow.options.entity.create'),
-        action: () => {
-          menuStore.setActiveDerMenu(DerFlowEnum.NEW_ENTITY);
-          menuStore.setScope(FormScope.CREATE);
-        },
-        infoText: t('der.explanation.entity'),
-      },
-      {
-        label: t('menu.der_flow.options.entity.navigate'),
-        action: () => {
-          if (hasEntities()) {
-            menuStore.setActiveDerMenu(DerFlowEnum.ENTITIES);
-          }
-        },
-      },
-      {
-        label: t('menu.der_flow.options.entity.read'),
-        action: () => {
-          if (hasEntities()) {
-            diagramTool.readAllEntities();
-          }
-        },
-      },
-      {
-        label: t('menu.der_flow.options.relationship.create'),
-        action: createRelationships,
-        infoText: t('der.explanation.relationship'),
-      },
-      {
-        label: t('menu.der_flow.options.relationship.navigate'),
-        action: () => {
-          if (hasRelationships()) {
-            menuStore.setActiveDerMenu(DerFlowEnum.RELATIONSHIPS);
-          }
-        },
-      },
-      {
-        label: t('menu.der_flow.options.relationship.read'),
-        action: () => {
-          if (hasRelationships()) {
-            diagramTool.readAllRelationships();
-          }
-        },
-      },
-      {
-        label: t('menu.der_flow.options.diagram.read'),
-        action: () => {
-          if (hasEntities()) {
-            diagramTool.readDiagram();
-          }
-        },
-      },
-      {
-        label: t('menu.der_flow.options.diagram.generate_sql'),
-        action: () => {
-          if (hasEntities()) {
-            menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
-          }
-        },
-        infoText: t('message.sql_generator_helper'),
-      },
-      {
-        label: 'Compartilhar diagrama',
-        action: () => menuStore.setActiveDerMenu(DerFlowEnum.SHARE_DIAGRAM),
-        infoText: 'Convide outro usuário para visualizar o diagrama ou exporte em PDF.',
-      },
-      {
-        label: 'Reorganizar diagrama automaticamente',
-        action: () => {
-          diagramTool.reorganizeDiagram(true);
-          tts.speakPhrase('Diagrama reorganizado.');
-        },
-        infoText:
-          'Reposiciona todas as entidades e relacionamentos em uma grade organizada, desfazendo qualquer posição manual anterior.',
-      },
-        ]),
-    ],
+    items: readOnly
+      ? [
+          {
+            label:
+              'Este diagrama foi compartilhado com você somente para leitura.',
+            action: () => {},
+          },
+          navigateEntities,
+          readEntities,
+          navigateRelationships,
+          readRelationships,
+          readDiagram,
+          generateSql,
+          reorganize,
+        ]
+      : [
+          createEntity,
+          navigateEntities,
+          readEntities,
+          createRelationship,
+          navigateRelationships,
+          readRelationships,
+          readDiagram,
+          generateSql,
+          share,
+          reorganize,
+        ],
   };
 });
 
