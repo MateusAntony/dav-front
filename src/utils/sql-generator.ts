@@ -7,6 +7,13 @@ import {
   type DerEntity,
 } from '~/src/interfaces/der-diagram';
 
+// ---------------------------------------------------------------------------
+// Cada nó da árvore de SQL carrega, ao mesmo tempo:
+//  - technicalCode: o SQL padrão (o que de fato roda no banco)
+//  - simpleCode: a MESMA informação em texto simples, sem sintaxe de SQL
+//  - explanation: o "porquê" daquilo existir daquele jeito (lido no F1)
+// As três coisas nascem do mesmo dado, nunca divergem entre si.
+// ---------------------------------------------------------------------------
 
 export interface SqlColumnNode {
   id: string;
@@ -234,6 +241,64 @@ function simpleColumnLine(col: ColumnBuild): string {
 // ---------------------------------------------------------------------------
 // Geração principal
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Explicação simples (para ser ouvida), no formato:
+//   "A tabela aluno tem 3 colunas de dados: nome, idade e email.
+//    A chave primária é id, que identifica cada registro.
+//    A chave estrangeira é turma_id, que liga esta tabela à tabela turma."
+// ---------------------------------------------------------------------------
+const spokenName = (name: string) => name.replace(/_/g, ' ');
+
+const joinList = (items: string[]): string => {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
+};
+
+function simpleTableText(table: TableBuild): string {
+  const plain = table.columns.filter((c) => !c.isPrimaryKey && !c.isForeignKey);
+  const pks = table.columns.filter((c) => c.isPrimaryKey);
+  const fks = table.columns.filter((c) => c.isForeignKey && c.references);
+
+  const parts: string[] = [];
+
+  parts.push(
+    plain.length === 0
+      ? `A tabela ${spokenName(table.tableName)} não tem colunas de dados comuns, apenas colunas de chave.`
+      : `A tabela ${spokenName(table.tableName)} tem ${plain.length} ${
+          plain.length === 1 ? 'coluna de dados' : 'colunas de dados'
+        }: ${joinList(plain.map((c) => spokenName(c.name)))}.`,
+  );
+
+  if (pks.length === 1) {
+    parts.push(
+      `A chave primária é ${spokenName(pks[0].name)}, que identifica cada registro.`,
+    );
+  } else if (pks.length > 1) {
+    parts.push(
+      `A chave primária é formada por ${joinList(
+        pks.map((c) => spokenName(c.name)),
+      )} juntas, e identifica cada registro.`,
+    );
+  }
+
+  if (fks.length === 1) {
+    parts.push(
+      `A chave estrangeira é ${spokenName(fks[0].name)}, que liga esta tabela à tabela ${spokenName(fks[0].references!.table)}.`,
+    );
+  } else if (fks.length > 1) {
+    parts.push(
+      `As chaves estrangeiras são ${joinList(
+        fks.map(
+          (c) =>
+            `${spokenName(c.name)}, que liga à tabela ${spokenName(c.references!.table)}`,
+        ),
+      )}.`,
+    );
+  }
+
+  return parts.join(' ');
+}
 
 export function generateSqlScript(diagram: Diagram): SqlScript {
   const entities = diagram.entities ?? [];
@@ -552,15 +617,9 @@ export function generateSqlScript(diagram: Diagram): SqlScript {
       : technicalColumnLines;
     const technicalCode = `CREATE TABLE ${table.tableName} (\n${technicalAllLines.join(',\n')}\n);`;
 
-    const simpleLines = table.columns.map((col) => `  ${simpleColumnLine(col)}`);
-    const simpleCompositePk =
-      table.pkColumns.length > 1
-        ? `  (identidade da linha = ${table.pkColumns.join(' + ')})`
-        : null;
-    const simpleAllLines = simpleCompositePk
-      ? [...simpleLines, simpleCompositePk]
-      : simpleLines;
-    const simpleCode = `Tabela "${table.tableName}":\n${simpleAllLines.join('\n')}`;
+    // Texto simplificado: serve só para ser OUVIDO (nunca é exibido na tela).
+    // Frases curtas, sem sintaxe de SQL e sem tipos de dados.
+    const simpleCode = simpleTableText(table);
 
     const fkCount = table.columns.filter((c) => c.isForeignKey).length;
 

@@ -1,9 +1,7 @@
 <template>
   <div class="sql-code-view printable-diagram">
-    <p class="sql-code-view__label">
-      {{ sqlGen.codeMode.value === 'technical' ? 'SQL (sintaxe técnica)' : 'SQL (texto simples)' }}
-    </p>
-    <pre class="sql-code-view__code"><code>{{ sqlGen.displayedCode.value || 'Nenhuma tabela gerada ainda.' }}</code></pre>
+    <p class="sql-code-view__label">SQL do diagrama inteiro (código técnico)</p>
+    <pre class="sql-code-view__code"><code>{{ sqlGen.fullCode.value || 'Nenhuma tabela gerada ainda.' }}</code></pre>
   </div>
 </template>
 

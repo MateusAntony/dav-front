@@ -16,6 +16,14 @@ function speakSummary() {
   tts.speakPhrase(script.summary);
 }
 
+// O texto simplificado existe só para ser OUVIDO; na tela aparece
+// apenas o código técnico.
+function speakSimpleExplanation() {
+  const script = sqlGen.script.value;
+  if (!script) return;
+  tts.speakSequence(script.tables.map((table) => table.simpleCode));
+}
+
 function buildMenu() {
   const script = sqlGen.script.value;
 
@@ -28,10 +36,6 @@ function buildMenu() {
             'Nenhuma tabela pode ser gerada ainda. Crie ao menos uma entidade no diagrama.',
           action: () => {},
         },
-        {
-          label: 'Voltar',
-          action: () => menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT),
-        },
       ],
     };
     return;
@@ -43,14 +47,10 @@ function buildMenu() {
       action: speakSummary,
     },
     {
-      label:
-        sqlGen.codeMode.value === 'technical'
-          ? 'Exibir código em texto simples (sem sintaxe de SQL)'
-          : 'Exibir código SQL técnico (sintaxe padrão)',
-      action: () => {
-        sqlGen.toggleCodeMode();
-        buildMenu();
-      },
+      label: 'Ouvir explicação simplificada do SQL',
+      action: speakSimpleExplanation,
+      infoText:
+        'Lê, em linguagem simples e sem a sintaxe do SQL, o que cada tabela guarda.',
     },
     ...script.tables.map((table) => ({
       label: table.label,
@@ -58,14 +58,12 @@ function buildMenu() {
         sqlGen.selectTable(table.id);
         menuStore.setActiveDerMenu(DerFlowEnum.SQL_TABLE_DETAIL);
       },
+      infoText:
+        'Abre a tabela e permite simular comandos SQL (SELECT, INSERT, UPDATE e DELETE) com dados de exemplo.',
     })),
     {
       label: 'Exportar SQL como arquivo (.sql)',
       action: () => sqlGen.exportSql(),
-    },
-    {
-      label: 'Voltar',
-      action: () => menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT),
     },
   ];
 
@@ -73,8 +71,9 @@ function buildMenu() {
 }
 
 onBeforeMount(() => {
+  // Ao abrir "Gerar SQL" o painel mostra o SQL do diagrama inteiro; só
+  // aparece o de uma tabela quando ela for escolhida na lista.
   sqlGen.build();
-  sqlGen.selectTable(null); // painel visual mostra o script inteiro aqui
   buildMenu();
 });
 </script>

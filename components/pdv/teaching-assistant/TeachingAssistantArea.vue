@@ -15,8 +15,15 @@
       <PDVTtsHistory class="assistant-item" />
     </div>
   </div>
-  <PDVSqlCodeView
+  <PDVSqlTableSimulation
     v-if="
+      diagramTool.diagram.value &&
+      menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL &&
+      sqlGen.selectedTable.value
+    "
+  />
+  <PDVSqlCodeView
+    v-else-if="
       diagramTool.diagram.value &&
       (menuStore.activeDerMenu === DerFlowEnum.SQL_GENERATOR ||
         menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL)
@@ -29,6 +36,7 @@ import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
 
 const diagramTool = useDiagram();
 const menuStore = useMenuOptions();
+const sqlGen = useSqlGenerator();
 const showTAM = ref(true);
 </script>
 <style scoped scss>

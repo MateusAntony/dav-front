@@ -23,21 +23,11 @@
     <FocusableElement title="Exportar diagrama como PDF" @click="exportPdf">
       Exportar como PDF
     </FocusableElement>
-
-    <FocusableElement
-      title="Voltar ao diagrama"
-      @click="menu.setActiveDerMenu(DerFlowEnum.DEFAULT)"
-    >
-      Voltar
-    </FocusableElement>
   </section>
 </template>
 
 <script setup lang="ts">
-import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
-
 const diagramTool = useDiagram();
-const menu = useMenuOptions();
 const tts = useTTS();
 const { shareWithUser, listShares, removeShare } = useDiagramsApi();
 

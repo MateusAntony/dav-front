@@ -1,50 +1,55 @@
 import { generateSqlScript, type SqlScript } from '~/src/utils/sql-generator';
 
-export type SqlCodeMode = 'technical' | 'simple';
-
 let instance: ReturnType<typeof createSqlGeneratorStore> | null = null;
 
+// IMPORTANTE: este estado é compartilhado por TODOS os componentes. Se ele for
+// criado dentro do setup de um componente, os `computed` ficam presos ao ciclo
+// de vida DESSE componente: quando ele é desmontado (ex.: ao sair do menu), o
+// Vue 3.4 "congela" o computed e ele nunca mais atualiza — a tela passa a mostrar
+// sempre o primeiro SQL / a primeira tabela escolhida. O effectScope(true) abaixo
+// cria um escopo independente, que nunca é desmontado.
+const sharedScope = effectScope(true);
+
 function createSqlGeneratorStore() {
-  const script = ref<SqlScript | null>(null);
-  const codeMode = ref<SqlCodeMode>('simple');
+  return sharedScope.run(buildSqlGeneratorStore) as ReturnType<
+    typeof buildSqlGeneratorStore
+  >;
+}
+
+function buildSqlGeneratorStore() {
   const selectedTableId = ref<string | null>(null);
 
+  // O script é SEMPRE calculado a partir do diagrama aberto neste momento.
+  // Antes ele era uma "foto" tirada ao entrar na tela; se a foto ficasse
+  // velha (outro projeto, outra conta, exemplo do convidado) o SQL mostrado
+  // era o do diagrama errado.
+  const script = computed<SqlScript | null>(() => {
+    const current = useDiagram().diagram.value;
+    return current ? generateSqlScript(current) : null;
+  });
+
+  // Chamado ao entrar em "Gerar SQL": começa sem tabela escolhida e com a
+  // simulação zerada (os registros de exemplo pertencem ao diagrama atual).
   const build = () => {
-    const diagramTool = useDiagram();
-    if (!diagramTool.diagram.value) {
-      script.value = null;
-      return;
-    }
-    script.value = generateSqlScript(diagramTool.diagram.value);
+    selectedTableId.value = null;
+    useSqlSimulator().reset();
   };
 
   const selectedTable = computed(
     () => script.value?.tables.find((t) => t.id === selectedTableId.value) ?? null,
   );
 
-  // Código exibido no painel visual, de acordo com o modo atual.
-  // Sem tabela selecionada: script inteiro. Com tabela selecionada: só aquela tabela.
-  const displayedCode = computed(() => {
-    if (!script.value) return '';
-    if (selectedTable.value) {
-      return codeMode.value === 'technical'
-        ? selectedTable.value.technicalCode
-        : selectedTable.value.simpleCode;
-    }
-    return codeMode.value === 'technical'
-      ? script.value.technicalSql
-      : script.value.simpleSql;
-  });
-
-  const columnCode = (column: { technicalCode: string; simpleCode: string }) =>
-    codeMode.value === 'technical' ? column.technicalCode : column.simpleCode;
-
-  const toggleCodeMode = () => {
-    codeMode.value = codeMode.value === 'technical' ? 'simple' : 'technical';
-  };
+  // Só o código técnico é exibido na tela. O texto simplificado existe
+  // apenas para ser OUVIDO (leitura por voz), nunca para ser mostrado.
+  const fullCode = computed(() => script.value?.technicalSql ?? '');
 
   const selectTable = (tableId: string | null) => {
     selectedTableId.value = tableId;
+  };
+
+  const reset = () => {
+    selectedTableId.value = null;
+    useSqlSimulator().reset();
   };
 
   const exportSql = () => {
@@ -62,14 +67,12 @@ function createSqlGeneratorStore() {
 
   return {
     script,
-    codeMode,
     selectedTableId,
     selectedTable,
-    displayedCode,
-    columnCode,
+    fullCode,
     build,
-    toggleCodeMode,
     selectTable,
+    reset,
     exportSql,
   };
 }

@@ -3,39 +3,47 @@
 </template>
 <script setup lang="ts">
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
+import {
+  commandExplanations,
+  type SimCommand,
+} from '~/src/utils/sql-simulator';
 
-const menuStore = useMenuOptions();
 const tts = useTTS();
+const menuStore = useMenuOptions();
 const sqlGen = useSqlGenerator();
+const simulator = useSqlSimulator();
 
 const menu = ref();
 
-function speakWholeTable() {
+// Ouve apenas a explicação geral da tabela. O detalhe de cada coluna já está
+// na leitura do DER e não é repetido aqui.
+function speakTable() {
   const table = sqlGen.selectedTable.value;
   if (!table) return;
-  const phrases = [
-    table.explanation,
-    ...table.columns.map((col) => `Coluna ${col.name}: ${sqlGen.columnCode(col)}`),
-  ];
-  tts.speakSequence(phrases);
+  tts.speakPhrase(`${table.label}. ${table.explanation}`);
+}
+
+// Executa um comando na tabela: o resultado aparece na tabela exibida na tela
+// (PDVSqlTableSimulation) e um resumo curto é falado.
+function runCommand(command: SimCommand) {
+  const table = sqlGen.selectedTable.value;
+  if (!table) return;
+  const result = simulator.run(command, table);
+  if (result) tts.speakPhrase(result.spoken);
+}
+
+function clearRecords() {
+  simulator.reset();
+  tts.speakPhrase('Registros de exemplo apagados. A simulação recomeçou.');
 }
 
 function buildMenu() {
   const table = sqlGen.selectedTable.value;
 
+  // Sem tabela escolhida não há o que simular: volta para a lista de tabelas
+  // (em vez de mostrar um menu vazio).
   if (!table) {
-    menu.value = {
-      title: 'Tabela',
-      items: [
-        {
-          label: 'Voltar',
-          action: () => {
-            sqlGen.selectTable(null);
-            menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
-          },
-        },
-      ],
-    };
+    menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
     return;
   }
 
@@ -43,31 +51,35 @@ function buildMenu() {
     title: `Tabela ${table.name}`,
     items: [
       {
-        label: 'Ouvir tabela inteira, coluna por coluna',
-        action: speakWholeTable,
+        label: 'Ouvir explicação desta tabela',
+        action: speakTable,
         infoText: table.explanation,
       },
       {
-        label:
-          sqlGen.codeMode.value === 'technical'
-            ? 'Exibir código em texto simples (sem sintaxe de SQL)'
-            : 'Exibir código SQL técnico (sintaxe padrão)',
-        action: () => {
-          sqlGen.toggleCodeMode();
-          buildMenu();
-        },
+        label: 'SELECT: consultar os registros',
+        action: () => runCommand('SELECT'),
+        infoText: commandExplanations.SELECT,
       },
-      ...table.columns.map((col) => ({
-        label: `${col.name}: ${sqlGen.columnCode(col)}`,
-        action: () => tts.speakPhrase(sqlGen.columnCode(col)),
-        infoText: col.explanation,
-      })),
       {
-        label: 'Voltar',
-        action: () => {
-          sqlGen.selectTable(null);
-          menuStore.setActiveDerMenu(DerFlowEnum.SQL_GENERATOR);
-        },
+        label: 'INSERT: inserir um registro de exemplo',
+        action: () => runCommand('INSERT'),
+        infoText: commandExplanations.INSERT,
+      },
+      {
+        label: 'UPDATE: alterar um registro',
+        action: () => runCommand('UPDATE'),
+        infoText: commandExplanations.UPDATE,
+      },
+      {
+        label: 'DELETE: excluir um registro',
+        action: () => runCommand('DELETE'),
+        infoText: commandExplanations.DELETE,
+      },
+      {
+        label: 'Limpar registros de exemplo',
+        action: clearRecords,
+        infoText:
+          'Apaga todos os registros de exemplo de todas as tabelas e recomeça a simulação do zero.',
       },
     ],
   };
