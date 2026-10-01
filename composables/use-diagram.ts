@@ -19,6 +19,12 @@ import {
 } from '~/src/interfaces/der-diagram';
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
 import { diagramMock } from '~/mock/diagram.mock';
+import { computeLayout, type Size } from '~/src/utils/diagram-layout';
+
+// Ao abrir um diagrama, quem ainda não tem posição é organizado
+// automaticamente (posições já salvas pelo usuário são respeitadas).
+// Coloque true para SEMPRE reorganizar tudo ao abrir, descartando posições salvas.
+const ALWAYS_AUTO_LAYOUT_ON_OPEN = false;
 
 let instance: any;
 
@@ -36,6 +42,33 @@ export function useDiagram() {
     const diagram = ref<Diagram | null>(null);
     const parsedDiagram = ref<ParsedDiagram | null>(null);
     const isReadOnly = ref(false);
+    // Incrementado a cada reorganização: a tela observa isso para redesenhar
+    // as linhas/cardinalidades depois que os elementos chegam na nova posição.
+    const layoutVersion = ref(0);
+    // Altura (px) do quadro do diagrama. Cresce junto com o diagrama para que
+    // nada fique cortado nem preso (a lib de arrastar limita cada elemento
+    // ao tamanho do quadro).
+    const canvasHeight = ref(0);
+
+    // Zera TUDO que pertence ao usuário logado. Chamado ao trocar de conta ou
+    // sair: como o Nuxt é uma SPA, sem isso a próxima conta herdaria a lista de
+    // diagramas, o diagrama aberto e o modo somente leitura da anterior.
+    const resetSession = () => {
+      diagram.value = null;
+      parsedDiagram.value = null;
+      diagramsList.value = [];
+      isReadOnly.value = false;
+      layoutVersion.value = 0;
+      canvasHeight.value = 0;
+    };
+
+    // Defesa em profundidade: mesmo que algum caminho de UI esqueça de esconder
+    // uma opção de edição, quem só tem acesso de leitura não altera nada.
+    const denyIfReadOnly = () => {
+      if (!isReadOnly.value) return false;
+      tts.speakPhrase('Você tem acesso somente leitura neste diagrama.');
+      return true;
+    };
 
     // const loadDiagram = (diagramId: string) => {
     //   /** TODO - Função de get diagram */
@@ -51,6 +84,7 @@ export function useDiagram() {
           ...diagramMock,
           id: uuidv4(),
         };
+        isReadOnly.value = false;
         parseDiagram();
         return;
       }
@@ -68,6 +102,7 @@ export function useDiagram() {
           JSON.stringify({ entities: [], relationships: [] }),
         );
         diagram.value = { id: created.id, name: created.name, entities: [], relationships: [] };
+        isReadOnly.value = false;
       }
       parseDiagram();
     };
@@ -108,6 +143,12 @@ export function useDiagram() {
         menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
         return;
       }
+      // Logado: nenhum diagrama fica aberto até o usuário escolher um projeto.
+      // Sem isso, o diagrama anterior (outro projeto, outra conta ou o exemplo
+      // do convidado) continuava aparecendo e alimentando o "Gerar SQL".
+      diagram.value = null;
+      parsedDiagram.value = null;
+      isReadOnly.value = false;
       await listUserDiagrams();
       if (menu.diagramListMode === 'shared') {
         menu.setActiveDerMenu(DerFlowEnum.DIAGRAM_LIST);
@@ -231,6 +272,7 @@ export function useDiagram() {
     // };
 
     const createEntity = (name: string) => {
+      if (denyIfReadOnly()) return;
       const id = uuidv4();
       if (diagram.value) {
         diagram.value.entities.push({
@@ -253,6 +295,7 @@ export function useDiagram() {
     };
 
     const editEntityName = (newName: string) => {
+      if (denyIfReadOnly()) return;
       if (diagram.value) {
         const entity = getEntity();
         const parsedEntity = getEntity(true);
@@ -271,65 +314,80 @@ export function useDiagram() {
       }
     };
 
-    // Layout em grade: cada entidade/relacionamento ocupa uma célula de
-    // tamanho fixo, em ordem. Escolhido no lugar de um layout "flui e
-    // mede o elemento anterior" porque é determinístico — sempre produz
-    // o mesmo resultado organizado, independente de quando o navegador
-    // termina de desenhar cada elemento (a causa da bagunça anterior).
-    const GRID_CARD_WIDTH = 260;
-    const GRID_CARD_HEIGHT = 190;
-    const GRID_GAP = 32;
-
-    const gridPositionFor = (
-      index: number,
-      containerWidth: number,
-    ): DiagramPosition => {
-      const columns = Math.max(
-        1,
-        Math.floor(
-          (containerWidth + GRID_GAP) / (GRID_CARD_WIDTH + GRID_GAP),
-        ),
-      );
-      const col = index % columns;
-      const row = Math.floor(index / columns);
-      return {
-        x: GRID_GAP + col * (GRID_CARD_WIDTH + GRID_GAP),
-        y: GRID_GAP + row * (GRID_CARD_HEIGHT + GRID_GAP),
-      };
+    // Mede o elemento real na tela (o tamanho depende do texto). Se ele ainda
+    // não foi desenhado, devolve null e o layout usa uma estimativa.
+    const measureElement = (id: string): Size | null => {
+      const el = document.getElementById(id);
+      if (!el || !el.offsetWidth || !el.offsetHeight) return null;
+      return { w: el.offsetWidth, h: el.offsetHeight };
     };
 
-    // Recalcula a posição de quem ainda não tem posição própria
-    // (x/y nulos) — preserva o que o usuário já arrastou manualmente.
-    // Passe force=true para recalcular TUDO (usado pelo botão
-    // "Reorganizar diagrama automaticamente").
+    // Ajusta a altura do quadro. É feito de forma SÍNCRONA no DOM e seguido de
+    // um evento "resize", que faz a lib de arrastar reler o tamanho do quadro
+    // antes de receber as novas posições (senão ela as "corrige" para dentro
+    // do tamanho antigo e o diagrama sai torto).
+    const setCanvasHeight = (needed: number) => {
+      if (!process.client) return;
+      const height = Math.max(Math.ceil(needed), window.innerHeight);
+      canvasHeight.value = height;
+      const canvas = document.getElementById('diagram-canvas');
+      if (canvas) {
+        canvas.style.height = `${height}px`;
+        window.dispatchEvent(new Event('resize'));
+      }
+    };
+
+    const hasUnpositioned = () =>
+      !!diagram.value &&
+      [...diagram.value.entities, ...diagram.value.relationships].some(
+        (item) => item.position?.x == null || item.position?.y == null,
+      );
+
+    // Calcula (src/utils/diagram-layout.ts) e aplica as posições.
+    //  - force=false: só posiciona quem ainda não tem posição (x/y nulos),
+    //    sem sobrepor o que o usuário já arrastou.
+    //  - force=true: recalcula TUDO (botão "Reorganizar diagrama").
+    // No fim, incrementa layoutVersion: é o sinal para a tela redesenhar as
+    // linhas e cardinalidades quando os elementos já estiverem no lugar novo.
     const reorganizeDiagram = (force = false) => {
       if (!diagram.value || !process.client) return;
 
-      const containerWidth = window.innerWidth * 0.85;
-      let index = 0;
+      const canvas = document.getElementById('diagram-canvas');
+      const containerWidth = canvas?.clientWidth || window.innerWidth * 0.85;
+
+      const layout = computeLayout(diagram.value, {
+        containerWidth,
+        force,
+        measureEntity: (entity) => measureElement(entity.id),
+        measureRelationship: (relationship) => measureElement(relationship.id),
+      });
+
+      setCanvasHeight(layout.bounds.height + 80);
 
       diagram.value.entities.forEach((entity) => {
-        const needsPosition =
-          force || entity.position?.x === null || entity.position?.y === null;
-        if (needsPosition) {
-          updateEntityPosition(entity.id, gridPositionFor(index, containerWidth));
-        }
-        index += 1;
+        const position = layout.entities[entity.id];
+        if (position) updateEntityPosition(entity.id, position);
+      });
+      diagram.value.relationships.forEach((relationship) => {
+        const position = layout.relationships[relationship.id];
+        if (position) updateRelationshipPosition(relationship.id, position);
       });
 
-      diagram.value.relationships.forEach((relationship) => {
-        const needsPosition =
-          force ||
-          relationship.position?.x === null ||
-          relationship.position?.y === null;
-        if (needsPosition) {
-          updateRelationshipPosition(
-            relationship.id,
-            gridPositionFor(index, containerWidth),
-          );
-        }
-        index += 1;
-      });
+      layoutVersion.value += 1;
+    };
+
+    // Posiciona só o que acabou de ser criado (sem mexer no resto).
+    const placeNewElements = () => {
+      if (hasUnpositioned()) reorganizeDiagram(false);
+    };
+
+    // Organização inicial: chamada pela tela sempre que um diagrama é aberto.
+    const autoLayoutOnOpen = () => {
+      if (ALWAYS_AUTO_LAYOUT_ON_OPEN) {
+        reorganizeDiagram(true);
+      } else if (hasUnpositioned()) {
+        reorganizeDiagram(false);
+      }
     };
 
     const getEntity = (parsed?: boolean) => {
@@ -342,6 +400,7 @@ export function useDiagram() {
     };
 
     const removeEntity = () => {
+      if (denyIfReadOnly()) return;
       if (diagram.value && parsedDiagram.value) {
         const id = derStore.currentEntityId;
         diagram.value.entities = diagram.value.entities.filter(
@@ -383,6 +442,7 @@ export function useDiagram() {
       cardinality: CardinalityOptions;
       type: RelationshipTypeOptions;
     }) => {
+      if (denyIfReadOnly()) return;
       if (diagram.value && parsedDiagram.value) {
         const [entityA, entityB] = getRelationshipEntities(
           props.entityAId,
@@ -420,6 +480,7 @@ export function useDiagram() {
     };
 
     const editRelationship = (newData: Omit<DerRelationship, 'id'>) => {
+      if (denyIfReadOnly()) return;
       if (diagram.value) {
         const relationship = getRelationship() as DerRelationship;
         const parsedRelationship = getRelationship(true) as ParsedRelationship;
@@ -473,6 +534,7 @@ export function useDiagram() {
     };
 
     const removeRelationship = () => {
+      if (denyIfReadOnly()) return;
       if (diagram.value && parsedDiagram.value) {
         const id = derStore.currentRelationshipId;
         diagram.value.relationships = diagram.value.relationships.filter(
@@ -488,6 +550,7 @@ export function useDiagram() {
       name: string;
       type: DatabaseTypeOptions;
     }) => {
+      if (denyIfReadOnly()) return;
       if (diagram.value && parsedDiagram.value) {
         const entity = getEntity();
         const parsedEntity = getEntity(true);
@@ -509,6 +572,7 @@ export function useDiagram() {
     };
 
     const editAttribute = (newData: Omit<DerAttribute, 'id'>) => {
+      if (denyIfReadOnly()) return;
       if (diagram.value) {
         const attr = getAttribute();
         const parsedAttr = getAttribute(true);
@@ -534,6 +598,7 @@ export function useDiagram() {
     };
 
     const removeAttribute = () => {
+      if (denyIfReadOnly()) return;
       if (diagram.value) {
         const entity = getEntity();
         const parsedEntity = getEntity(true);
@@ -629,6 +694,16 @@ export function useDiagram() {
       }
     };
 
+    // Leitura de um único atributo (usada por quem só tem acesso de leitura).
+    const readAttribute = () => {
+      const attr = getAttribute(true) as ParsedAttribute | undefined;
+      if (attr) {
+        tts.speakPhrase(
+          i18n.t('der.read_aux.attr', { name: attr.name, type: attr.type }),
+        );
+      }
+    };
+
     const readRelationship = () => {
       const relationship = getRelationship(true) as ParsedRelationship;
       if (relationship) {
@@ -664,6 +739,13 @@ export function useDiagram() {
       readAllRelationships,
       readEntityAttrs,
       readRelationship,
+      readAttribute,
+      layoutVersion,
+      canvasHeight,
+      setCanvasHeight,
+      placeNewElements,
+      autoLayoutOnOpen,
+      resetSession,
       saveDiagram,
       diagramsList,
       listUserDiagrams,
