@@ -1,5 +1,10 @@
 <template>
-  <div ref="diagramContainer" class="diagram printable-diagram">
+  <div
+    id="diagram-canvas"
+    ref="diagramContainer"
+    class="diagram printable-diagram"
+    :style="canvasStyle"
+  >
     <svg ref="svgContainer" class="diagram-lines">
       <text
         v-for="cardinality in cardinalities"
@@ -37,7 +42,7 @@
       @drag-stop="
         (...event) => handleRelationshipDragStop(relationship.id, event)
       "
-      @dragging="calculateLinePosition"
+      @dragging="scheduleLines"
     >
       <PDVRelationship :relationship="relationship" />
     </vueDraggableResizable>
@@ -55,7 +60,7 @@
       :draggable="!diagramTool.isReadOnly.value"
       class="draggable"
       @drag-stop="(...event) => handleEntityDragStop(entity.id, event)"
-      @dragging="calculateLinePosition"
+      @dragging="scheduleLines"
     >
       <PDVEntity :entity="entity" />
     </vueDraggableResizable>
@@ -91,6 +96,7 @@ const cardinalities = reactive<CardinalityLabel[]>([]);
 const calculateLinePosition = () => {
   lines.length = 0;
   cardinalities.length = 0;
+  if (!diagramTool.diagram.value || !diagramContainer.value) return;
   diagramTool.diagram.value.relationships.forEach(
     (relationship: DerRelationship) => {
       const fromEntity = document.getElementById(relationship.entityAId);
@@ -185,20 +191,66 @@ const handleRelationshipDragStop = (id: string, position: number[]) => {
   });
 };
 
-// Reorganiza sempre que: o diagrama carrega pela primeira vez, o
-// usuário troca de diagrama (o "id" muda), ou uma entidade/relação
-// nova é criada. Só preenche quem ainda não tem posição própria — quem
-// o usuário já arrastou manualmente não é movido.
-watch(
-  () => diagramTool.diagram.value?.id,
-  async () => {
-    await nextTick();
-    diagramTool.reorganizeDiagram();
-    await nextTick();
-    calculateLinePosition();
-  },
+// Altura do quadro: cresce com o diagrama (ver setCanvasHeight no useDiagram).
+const canvasStyle = computed(() =>
+  diagramTool.canvasHeight.value
+    ? { height: `${diagramTool.canvasHeight.value}px` }
+    : undefined,
 );
 
+// Linhas e cardinalidades são desenhadas a partir da posição REAL dos
+// elementos na tela. Depois que as posições mudam, os elementos só chegam ao
+// lugar novo após a renderização — por isso espera-se o próximo ciclo do Vue
+// e um quadro de animação antes de medir. Sem essa espera (e sem ninguém
+// pedir o redesenho após "Reorganizar"), as linhas ficavam nas posições
+// antigas até o usuário arrastar algum elemento.
+const nextFrame = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+// Se algum elemento (posição salva ou arrastado) passa da altura atual do
+// quadro, aumenta o quadro para caber.
+const fitCanvas = () => {
+  const container = diagramContainer.value as HTMLElement | null;
+  if (!container) return;
+  const top = container.getBoundingClientRect().top;
+  let bottom = 0;
+  container.querySelectorAll('.draggable').forEach((el) => {
+    bottom = Math.max(bottom, el.getBoundingClientRect().bottom - top);
+  });
+  if (bottom + 80 > container.clientHeight) {
+    diagramTool.setCanvasHeight(bottom + 80);
+  }
+};
+
+const redraw = async () => {
+  await nextTick();
+  await nextFrame();
+  if (!diagramTool.diagram.value) return;
+  fitCanvas();
+  calculateLinePosition();
+};
+
+// Durante o arrasto, redesenha no máximo uma vez por quadro.
+let frame = 0;
+const scheduleLines = () => {
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    calculateLinePosition();
+  });
+};
+
+// Organização inicial: ao abrir/trocar de diagrama, quem ainda não tem
+// posição é organizado automaticamente (posições já salvas são mantidas).
+const openDiagram = async () => {
+  await nextTick();
+  diagramTool.autoLayoutOnOpen();
+  await redraw();
+};
+
+watch(() => diagramTool.diagram.value?.id, openDiagram);
+
+// Entidade/relacionamento criado: posiciona só o novo, sem mexer no resto.
 watch(
   () => ({
     entityCount: diagramTool.diagram.value?.entities.length,
@@ -206,18 +258,43 @@ watch(
   }),
   async () => {
     await nextTick();
-    diagramTool.reorganizeDiagram();
-    await nextTick();
-    calculateLinePosition();
+    diagramTool.placeNewElements();
+    await redraw();
   },
   { deep: true },
 );
 
-onMounted(async () => {
-  await nextTick();
-  diagramTool.reorganizeDiagram();
-  await nextTick();
-  calculateLinePosition();
+// Qualquer mudança que mexa na geometria (posição, nome, atributos...)
+// redesenha as linhas. Cobre "Reorganizar", carregamento e arrasto.
+const layoutSignature = computed(() => {
+  const d = diagramTool.diagram.value;
+  if (!d) return '';
+  return JSON.stringify([
+    d.entities.map((e: any) => [
+      e.id,
+      e.name,
+      (e.attrs ?? []).map((a: any) => `${a.name}:${a.type}`),
+      e.position?.x,
+      e.position?.y,
+    ]),
+    d.relationships.map((r: any) => [
+      r.id,
+      r.name,
+      r.entityAId,
+      r.entityBId,
+      r.cardinality,
+      r.position?.x,
+      r.position?.y,
+    ]),
+  ]);
+});
+watch(layoutSignature, redraw);
+watch(() => diagramTool.layoutVersion.value, redraw);
+
+onMounted(openDiagram);
+
+onBeforeUnmount(() => {
+  if (frame) cancelAnimationFrame(frame);
 });
 </script>
 
@@ -227,7 +304,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   justify-content: flex-start;
   width: 100%;
-  height: 100dvh;
+  height: 100dvh; // mínimo; o quadro cresce conforme o diagrama (canvasStyle)
   border: var(--border-style);
   margin-top: 32px;
   position: relative;
