@@ -22,7 +22,6 @@
 <script setup lang="ts">
 const { t } = useI18n();
 const { login } = useAuth();
-const diagramTool = useDiagram();
 
 const email = ref('');
 const password = ref('');
@@ -32,7 +31,9 @@ const handleLogin = async () => {
   error.value = false;
   try {
     await login(email.value, password.value);
-    await diagramTool.loadDiagram();
+    // Nenhum diagrama é carregado aqui: quem está logado escolhe o seu em
+    // "Meus projetos" (initDiagrams). Carregar o primeiro da lista exibia o
+    // diagrama de outra pessoa (ou criava um vazio para contas só convidadas).
     navigateTo(Routes.HOME);
   } catch (e) {
     error.value = true;

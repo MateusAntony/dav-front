@@ -36,11 +36,11 @@ const { t } = useI18n();
 const initialFocus = ref();
 const welcomeElement = ref(null);
 const tts = useTTS();
-const authStore = useAuthStore();
 const diagramTool = useDiagram();
+const session = useSession();
 
 const enterAsGuest = async () => {
-  authStore.logout();
+  session.endSession();
   await diagramTool.loadDiagram();
   navigateTo(Routes.HOME);
 };
@@ -69,6 +69,9 @@ const loadVoices = async () => {
 };
 
 onBeforeMount(async () => {
+  // Voltar para cá significa sair do sistema: encerra a sessão anterior para
+  // que ninguém herde dados (diagramas, compartilhados) de quem saiu.
+  session.endSession();
   await loadVoices();
 });
 

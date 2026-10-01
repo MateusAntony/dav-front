@@ -44,6 +44,14 @@ export const useMenuOptions = defineStore('menu', {
     setDiagramListMode(mode: DiagramListMode) {
       this.diagramListMode = mode;
     },
+    // Volta tudo ao estado inicial (usado ao trocar de conta / sair).
+    reset() {
+      this.activeMainMenu = PDVMenusEnum.DEFAULT;
+      this.activeDerMenu = DerFlowEnum.DEFAULT;
+      this.previousDerMenu = undefined;
+      this.scope = FormScope.CREATE;
+      this.diagramListMode = 'own';
+    },
     isEditScope() {
       return this.scope === FormScope.EDIT;
     },

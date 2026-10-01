@@ -18,7 +18,13 @@ const menu = ref({
       action: () => {
         menuStore.setDiagramListMode('own');
         menuStore.setActiveMainMenu(PDVMenusEnum.PROJECTS);
-        menuStore.setActiveDerMenu(DerFlowEnum.DEFAULT);
+        // Logado: vai direto para a lista de projetos. Ir para o menu do
+        // diagrama (DEFAULT) deixava "Gerar SQL" clicável, por alguns
+        // instantes, sobre o diagrama antigo (ex.: o exemplo do convidado)
+        // enquanto a lista ainda carregava.
+        menuStore.setActiveDerMenu(
+          authStore.token ? DerFlowEnum.DIAGRAM_LIST : DerFlowEnum.DEFAULT,
+        );
       },
     },
     ...(authStore.token

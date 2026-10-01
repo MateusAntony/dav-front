@@ -20,5 +20,10 @@ export const useDerOptions = defineStore('der', {
     setCurrentRelationshipId(id: string) {
       this.currentRelationshipId = id;
     },
+    reset() {
+      this.currentEntityId = undefined;
+      this.currentAttrId = undefined;
+      this.currentRelationshipId = undefined;
+    },
   },
 });
