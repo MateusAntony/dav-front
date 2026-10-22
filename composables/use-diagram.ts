@@ -7,6 +7,7 @@ import {
   type DerRelationship,
   type Diagram,
   type DiagramPosition,
+  type SimulationRows,
   DatabaseTypeOptions,
   RelationshipTypeOptions,
   type ParsedDiagram,
@@ -119,11 +120,25 @@ export function useDiagram() {
         JSON.stringify({
           entities: currentDiagram.entities,
           relationships: currentDiagram.relationships,
+          simulation: currentDiagram.simulation ?? {},
         }),
       );
       console.log('LOG - resultado do salvamento:', result);
     };
 
+
+    // Guarda os registros de exemplo da simulação SQL no diagrama e salva.
+    // Quem só tem acesso de leitura (ou o convidado) mantém os registros apenas
+    // em memória: saveDiagram não envia nada nesses casos.
+    const saveSimulation = async (rows: SimulationRows) => {
+      if (!diagram.value) return;
+      diagram.value.simulation = rows;
+      try {
+        await saveDiagram();
+      } catch (error) {
+        console.error('Erro ao salvar registros da simulação:', error);
+      }
+    };
 
     const listUserDiagrams = async () => {
       const { listDiagrams } = useDiagramsApi();
@@ -173,6 +188,7 @@ export function useDiagram() {
         name: saved.name,
         entities: content.entities ?? [],
         relationships: content.relationships ?? [],
+        simulation: content.simulation ?? {},
       };
       isReadOnly.value = !saved.is_owner;
       parseDiagram();
@@ -747,6 +763,7 @@ export function useDiagram() {
       autoLayoutOnOpen,
       resetSession,
       saveDiagram,
+      saveSimulation,
       diagramsList,
       listUserDiagrams,
       initDiagrams,

@@ -178,11 +178,19 @@ export interface ParsedRelationship {
   type: string;
 }
 
+// Registros de exemplo da simulação de SQL, por nome de tabela. Ficam salvos
+// junto com o diagrama (no mesmo campo serialized_object do backend).
+export type SimulationRows = Record<
+  string,
+  Record<string, string | number | boolean | null>[]
+>;
+
 export interface Diagram {
   id: string;
   name: string;
   entities: DerEntity[];
   relationships: DerRelationship[];
+  simulation?: SimulationRows;
 }
 
 export interface ParsedDiagram {
