@@ -4,7 +4,11 @@
       <thead>
         <tr class="focusable-select-title">
           <th colspan="2">
-            <FocusableElement ref="selectTitle" :title="title" help-flag>
+            <FocusableElement
+              ref="selectTitle"
+              :title="title"
+              :help-flag="!hideHelpHint"
+            >
               {{ title }}
             </FocusableElement>
           </th>
@@ -40,6 +44,8 @@ interface FocusableSelectProps {
   }[];
   helpFlag?: boolean;
   shouldTranslate?: boolean;
+  // Não fala "Pressione a tecla F1..." no título (listas sem texto de ajuda).
+  hideHelpHint?: boolean;
 }
 
 const { title, items, helpFlag } = defineProps<FocusableSelectProps>();

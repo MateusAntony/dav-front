@@ -24,9 +24,16 @@ import { debounce } from 'lodash';
 interface FocusableInputProps {
   title: string;
   modelValue?: string;
+  // Permite confirmar com Enter sem digitar nada (ex.: valor opcional/NULL).
+  allowEmpty?: boolean;
+  // Foca o campo ao abrir a tela. Em telas com vários campos, só o primeiro
+  // deve ter foco inicial (senão o último campo montado "rouba" o foco).
+  autofocus?: boolean;
 }
 
-const props = defineProps<FocusableInputProps>();
+const props = withDefaults(defineProps<FocusableInputProps>(), {
+  autofocus: true,
+});
 
 const inputValue = ref(props.modelValue);
 let isInternalUpdate = false;
@@ -52,8 +59,14 @@ const handleFocus = (event: any) => {
 };
 
 const handleSubmit = () => {
+  // O "eco" do que foi digitado é falado 1,5 s depois da última tecla. Ao
+  // confirmar, ele é cancelado: senão sairia depois de avançar de tela e
+  // cortaria a fala da próxima pergunta ou do resultado.
+  debouncedAddPhraseToQueue.cancel();
   if (inputValue.value) {
     emit('submit', inputValue.value);
+  } else if (props.allowEmpty) {
+    emit('submit', '');
   } else {
     speakPhrase(i18n.t('message.empty_input'));
   }
@@ -77,10 +90,12 @@ watch(
   { deep: true },
 );
 
+onBeforeUnmount(() => debouncedAddPhraseToQueue.cancel());
+
 const focusableInput = ref<HTMLElement | null>(null);
 onMounted(async () => {
   await nextTick();
-  focusableInput.value?.focus();
+  if (props.autofocus) focusableInput.value?.focus();
 });
 </script>
 <style scoped>
