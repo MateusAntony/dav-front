@@ -3,10 +3,7 @@
 </template>
 <script setup lang="ts">
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
-import {
-  commandExplanations,
-  type SimCommand,
-} from '~/src/utils/sql-simulator';
+import { speakableSql } from '~/src/utils/sql-speech';
 
 const tts = useTTS();
 const menuStore = useMenuOptions();
@@ -15,26 +12,16 @@ const simulator = useSqlSimulator();
 
 const menu = ref();
 
-// Ouve apenas a explicação geral da tabela. O detalhe de cada coluna já está
-// na leitura do DER e não é repetido aqui.
-function speakTable() {
+// Lê, literalmente, o SQL (CREATE TABLE) da tabela escolhida.
+function speakTableSql() {
   const table = sqlGen.selectedTable.value;
   if (!table) return;
-  tts.speakPhrase(`${table.label}. ${table.explanation}`);
-}
-
-// Executa um comando na tabela: o resultado aparece na tabela exibida na tela
-// (PDVSqlTableSimulation) e um resumo curto é falado.
-function runCommand(command: SimCommand) {
-  const table = sqlGen.selectedTable.value;
-  if (!table) return;
-  const result = simulator.run(command, table);
-  if (result) tts.speakPhrase(result.spoken);
+  tts.speakSequence(speakableSql(table.technicalCode));
 }
 
 function clearRecords() {
-  simulator.reset();
-  tts.speakPhrase('Registros de exemplo apagados. A simulação recomeçou.');
+  simulator.clearAll();
+  tts.speakPhrase('Registros de exemplo apagados.');
 }
 
 function buildMenu() {
@@ -51,35 +38,23 @@ function buildMenu() {
     title: `Tabela ${table.name}`,
     items: [
       {
-        label: 'Ouvir explicação desta tabela',
-        action: speakTable,
-        infoText: table.explanation,
+        label: 'Ouvir o SQL desta tabela',
+        action: speakTableSql,
       },
       {
-        label: 'SELECT: consultar os registros',
-        action: () => runCommand('SELECT'),
-        infoText: commandExplanations.SELECT,
+        label: 'INSERT: inserir um registro digitando os valores',
+        action: () => menuStore.setActiveDerMenu(DerFlowEnum.SQL_INSERT),
       },
       {
-        label: 'INSERT: inserir um registro de exemplo',
-        action: () => runCommand('INSERT'),
-        infoText: commandExplanations.INSERT,
+        label: 'SELECT: montar e executar uma consulta',
+        action: () => {
+          simulator.startQuery(table.name);
+          menuStore.setActiveDerMenu(DerFlowEnum.SQL_SELECT);
+        },
       },
       {
-        label: 'UPDATE: alterar um registro',
-        action: () => runCommand('UPDATE'),
-        infoText: commandExplanations.UPDATE,
-      },
-      {
-        label: 'DELETE: excluir um registro',
-        action: () => runCommand('DELETE'),
-        infoText: commandExplanations.DELETE,
-      },
-      {
-        label: 'Limpar registros de exemplo',
+        label: 'Limpar todos os registros de exemplo',
         action: clearRecords,
-        infoText:
-          'Apaga todos os registros de exemplo de todas as tabelas e recomeça a simulação do zero.',
       },
     ],
   };

@@ -17,6 +17,13 @@ function createSqlGeneratorStore() {
 }
 
 function buildSqlGeneratorStore() {
+  // IMPORTANTE: useDiagram() só pode ser chamado durante o setup de um
+  // componente (ele usa useI18n). Por isso é capturado UMA vez, aqui, na
+  // criação do estado compartilhado — e não dentro de funções/computeds, que
+  // rodam depois (cliques, renderização) e quebrariam com "SyntaxError: 26".
+  const diagramTool = useDiagram();
+  const simulator = useSqlSimulator();
+
   const selectedTableId = ref<string | null>(null);
 
   // O script é SEMPRE calculado a partir do diagrama aberto neste momento.
@@ -24,15 +31,15 @@ function buildSqlGeneratorStore() {
   // velha (outro projeto, outra conta, exemplo do convidado) o SQL mostrado
   // era o do diagrama errado.
   const script = computed<SqlScript | null>(() => {
-    const current = useDiagram().diagram.value;
+    const current = diagramTool.diagram.value;
     return current ? generateSqlScript(current) : null;
   });
 
-  // Chamado ao entrar em "Gerar SQL": começa sem tabela escolhida e com a
-  // simulação zerada (os registros de exemplo pertencem ao diagrama atual).
+  // Chamado ao entrar em "Gerar SQL": começa sem tabela escolhida e carrega os
+  // registros de exemplo que foram salvos neste diagrama.
   const build = () => {
     selectedTableId.value = null;
-    useSqlSimulator().reset();
+    simulator.hydrate();
   };
 
   const selectedTable = computed(
@@ -49,7 +56,7 @@ function buildSqlGeneratorStore() {
 
   const reset = () => {
     selectedTableId.value = null;
-    useSqlSimulator().reset();
+    simulator.reset();
   };
 
   const exportSql = () => {

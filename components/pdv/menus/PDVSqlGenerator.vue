@@ -3,6 +3,7 @@
 </template>
 <script setup lang="ts">
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
+import { speakableSql } from '~/src/utils/sql-speech';
 
 const menuStore = useMenuOptions();
 const tts = useTTS();
@@ -10,10 +11,11 @@ const sqlGen = useSqlGenerator();
 
 const menu = ref();
 
-function speakSummary() {
+// Fala o código SQL gerado do diagrama inteiro, linha por linha.
+function speakSqlCode() {
   const script = sqlGen.script.value;
   if (!script) return;
-  tts.speakPhrase(script.summary);
+  tts.speakSequence(speakableSql(script.technicalSql));
 }
 
 // O texto simplificado existe só para ser OUVIDO; na tela aparece
@@ -43,11 +45,13 @@ function buildMenu() {
 
   const items = [
     {
-      label: 'Ouvir descrição geral do SQL gerado',
-      action: speakSummary,
+      label: 'Ouvir o código SQL gerado',
+      action: speakSqlCode,
+      infoText:
+        'Lê em voz alta o código SQL do diagrama inteiro, linha por linha.',
     },
     {
-      label: 'Ouvir explicação simplificada do SQL',
+      label: 'Ouvir explicação simplificada do SQL inteiro',
       action: speakSimpleExplanation,
       infoText:
         'Lê, em linguagem simples e sem a sintaxe do SQL, o que cada tabela guarda.',
@@ -58,8 +62,6 @@ function buildMenu() {
         sqlGen.selectTable(table.id);
         menuStore.setActiveDerMenu(DerFlowEnum.SQL_TABLE_DETAIL);
       },
-      infoText:
-        'Abre a tabela e permite simular comandos SQL (SELECT, INSERT, UPDATE e DELETE) com dados de exemplo.',
     })),
     {
       label: 'Exportar SQL como arquivo (.sql)',
@@ -67,7 +69,8 @@ function buildMenu() {
     },
   ];
 
-  menu.value = { title: 'Gerar SQL', items };
+  // O título é falado ao abrir a tela: o SQL já foi gerado ao entrar aqui.
+  menu.value = { title: 'SQL gerado', items };
 }
 
 onBeforeMount(() => {

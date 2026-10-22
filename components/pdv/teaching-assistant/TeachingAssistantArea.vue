@@ -18,7 +18,9 @@
   <PDVSqlTableSimulation
     v-if="
       diagramTool.diagram.value &&
-      menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL &&
+      (menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_INSERT ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT) &&
       sqlGen.selectedTable.value
     "
   />
@@ -26,7 +28,9 @@
     v-else-if="
       diagramTool.diagram.value &&
       (menuStore.activeDerMenu === DerFlowEnum.SQL_GENERATOR ||
-        menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL)
+        menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_INSERT ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT)
     "
   />
   <PDVDiagram v-else-if="diagramTool.diagram.value" />

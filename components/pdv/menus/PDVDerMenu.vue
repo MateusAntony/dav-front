@@ -49,6 +49,12 @@
   <PDVSqlTableDetail
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL"
   />
+  <PDVSqlInsertForm
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_INSERT"
+  />
+  <PDVSqlSelectBuilder
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT"
+  />
   <PDVShareDiagram
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.SHARE_DIAGRAM"
   />

@@ -9,6 +9,11 @@
     <p class="sql-sim__label">Estrutura (CREATE TABLE)</p>
     <pre class="sql-sim__code"><code>{{ table.technicalCode }}</code></pre>
 
+    <div v-if="isSelectMode" class="sql-sim__result">
+      <p class="sql-sim__label">Consulta que está sendo montada</p>
+      <pre class="sql-sim__code"><code>{{ livePreview }}</code></pre>
+    </div>
+
     <div
       v-if="result"
       class="sql-sim__result"
@@ -18,13 +23,37 @@
       <pre class="sql-sim__code"><code>{{ result.sql }}</code></pre>
       <p class="sql-sim__message">{{ result.message }}</p>
     </div>
-    <p v-else class="sql-sim__hint">
-      Use as opções do menu (SELECT, INSERT, UPDATE e DELETE) para simular
-      comandos. Os registros abaixo são apenas exemplos genéricos criados pelo
-      sistema, guardados só na memória — nada é salvo em banco de dados.
-    </p>
 
-    <div class="sql-sim__table-wrapper">
+    <div v-if="result?.resultSet" class="sql-sim__table-wrapper">
+      <table class="sql-sim__table">
+        <caption>
+          Resultado do SELECT ({{ result.resultSet.rows.length }})
+        </caption>
+        <thead>
+          <tr>
+            <th v-for="col in result.resultSet.columns" :key="col" scope="col">
+              {{ col }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="result.resultSet.rows.length === 0">
+            <td :colspan="result.resultSet.columns.length" class="sql-sim__empty">
+              Nenhum registro encontrado.
+            </td>
+          </tr>
+          <tr v-for="(row, index) in result.resultSet.rows" :key="index">
+            <td v-for="col in result.resultSet.columns" :key="col">
+              {{ display(row[col]) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Com um SELECT executado, só o resultado dele é mostrado: os registros
+         da tabela ficam escondidos para não misturar as duas tabelas. -->
+    <div v-if="!result?.resultSet" class="sql-sim__table-wrapper">
       <table class="sql-sim__table">
         <caption>
           Registros da tabela {{ table.name }} ({{ rows.length }})
@@ -44,7 +73,7 @@
         <tbody>
           <tr v-if="rows.length === 0">
             <td :colspan="table.columns.length" class="sql-sim__empty">
-              Nenhum registro. Use INSERT para adicionar um.
+              Nenhum registro.
             </td>
           </tr>
           <tr v-for="(row, index) in rows" :key="index" :class="rowClass(index)">
@@ -59,14 +88,22 @@
 </template>
 
 <script setup lang="ts">
-import type { SimValue } from '~/src/utils/sql-simulator';
+import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
+import { buildSelectSql, type SimValue } from '~/src/utils/sql-simulator';
 
 const sqlGen = useSqlGenerator();
 const simulator = useSqlSimulator();
+const menuStore = useMenuOptions();
 
 const table = computed(() => sqlGen.selectedTable.value);
 const rows = computed(() => simulator.rowsOf(table.value));
 const result = computed(() => simulator.resultFor(table.value));
+const isSelectMode = computed(
+  () => menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT,
+);
+const livePreview = computed(() =>
+  buildSelectSql(simulator.query.value, table.value ?? undefined),
+);
 
 const display = (value: SimValue | undefined) => {
   if (value === null || value === undefined) return 'NULL';
@@ -74,10 +111,12 @@ const display = (value: SimValue | undefined) => {
   return String(value);
 };
 
+// Só o INSERT destaca uma linha da tabela de registros.
 const rowClass = (index: number) => {
   const r = result.value;
-  if (!r || !r.highlight.includes(index) || !r.highlightKind) return '';
-  return `is-${r.highlightKind}`;
+  return r?.command === 'INSERT' && r.highlight.includes(index)
+    ? 'is-inserted'
+    : '';
 };
 </script>
 
@@ -122,9 +161,6 @@ const rowClass = (index: number) => {
 .sql-sim__message {
   margin: 8px 0 0;
   font-weight: bold;
-}
-.sql-sim__hint {
-  margin: 16px 0;
 }
 .sql-sim__table-wrapper {
   overflow-x: auto;
@@ -171,12 +207,5 @@ const rowClass = (index: number) => {
 tr.is-inserted td {
   background-color: rgba(27, 127, 59, 0.2);
   font-weight: bold;
-}
-tr.is-updated td {
-  background-color: rgba(255, 193, 7, 0.3);
-  font-weight: bold;
-}
-tr.is-selected td {
-  background-color: rgba(30, 100, 200, 0.12);
 }
 </style>

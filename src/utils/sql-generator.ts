@@ -49,7 +49,6 @@ export interface SqlScript {
   tables: SqlTableNode[];
   technicalSql: string;
   simpleSql: string;
-  summary: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -640,18 +639,9 @@ export function generateSqlScript(diagram: Diagram): SqlScript {
   const technicalSql = finalTables.map((t) => t.technicalCode).join('\n\n');
   const simpleSql = finalTables.map((t) => t.simpleCode).join('\n\n');
 
-  const totalColumns = finalTables.reduce((sum, t) => sum + t.columns.length, 0);
-  const totalFks = finalTables.reduce(
-    (sum, t) => sum + t.columns.filter((c) => c.isForeignKey).length,
-    0,
-  );
-
-  const summary = `Foram geradas ${finalTables.length} tabela(s), com ${totalColumns} coluna(s) no total e ${totalFks} chave(s) estrangeira(s). Dialeto: PostgreSQL.`;
-
   return {
     tables: finalTables,
     technicalSql,
     simpleSql,
-    summary,
   };
 }

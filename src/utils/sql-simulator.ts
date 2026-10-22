@@ -1,39 +1,48 @@
-import type { SqlColumnNode, SqlScript, SqlTableNode } from '~/src/utils/sql-generator';
+import type {
+  SqlColumnNode,
+  SqlScript,
+  SqlTableNode,
+} from '~/src/utils/sql-generator';
 
 // ---------------------------------------------------------------------------
-// Simulador de comandos SQL (SELECT / INSERT / UPDATE / DELETE).
+// Simulador de comandos SQL (INSERT e SELECT).
 //
-// Nada aqui fala com banco de dados: os "registros" vivem só na memória e os
-// valores são genéricos, gerados pelo sistema apenas para ilustrar o que cada
-// comando faz. As regras de chave estrangeira, chave primária e UNIQUE do SQL
-// gerado são respeitadas — assim, um INSERT em uma tabela "filha" só funciona
-// se já existir um registro na tabela "pai", como num banco de verdade.
+// Nada aqui fala com banco de dados: os registros são guardados em memória (e
+// salvos junto com o diagrama). As regras do SQL gerado — tipo de cada coluna,
+// NOT NULL, chave primária, UNIQUE e chave estrangeira — são respeitadas,
+// então o erro que o usuário vê é o mesmo que um banco de verdade daria.
 // ---------------------------------------------------------------------------
 
 export type SimValue = string | number | boolean | null;
 export type SimRow = Record<string, SimValue>;
-export type SimCommand = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE';
 
 export interface SimState {
   rows: Record<string, SimRow[]>;
-  counters: Record<string, number>;
+}
+
+export type SimCommand = 'SELECT' | 'INSERT';
+
+export interface SimResultSet {
+  columns: string[];
+  rows: SimRow[];
 }
 
 export interface SimResult {
   ok: boolean;
   command: SimCommand;
-  // Comando SQL "de verdade" que foi simulado (exibido na tela).
+  // Comando SQL (exibido na tela).
   sql: string;
-  // Explicação curta exibida na tela.
+  // Mensagem curta exibida na tela.
   message: string;
   // Texto pensado para ser ouvido (sem UUIDs, sem sintaxe).
   spoken: string;
-  // Linhas a destacar na tabela exibida.
+  // Linhas da tabela a destacar (INSERT: a linha nova).
   highlight: number[];
-  highlightKind?: 'inserted' | 'updated' | 'selected';
+  // Resultado de um SELECT.
+  resultSet?: SimResultSet;
 }
 
-export const createSimState = (): SimState => ({ rows: {}, counters: {} });
+export const createSimState = (): SimState => ({ rows: {} });
 
 export type UuidFactory = () => string;
 
@@ -47,15 +56,191 @@ export const defaultUuid: UuidFactory = () => {
 };
 
 // ---------------------------------------------------------------------------
-// Utilidades
+// Tipos de coluna
 // ---------------------------------------------------------------------------
 
-const rowsOf = (state: SimState, table: SqlTableNode): SimRow[] => {
-  if (!state.rows[table.name]) state.rows[table.name] = [];
-  return state.rows[table.name];
+export type ColumnKind =
+  | 'uuid'
+  | 'text'
+  | 'int'
+  | 'float'
+  | 'timestamp'
+  | 'bool'
+  | 'bytes'
+  | 'json';
+
+export const kindOf = (col: SqlColumnNode): ColumnKind => {
+  const type = col.sqlType.toUpperCase();
+  if (type === 'UUID') return 'uuid';
+  if (type === 'INTEGER') return 'int';
+  if (type === 'REAL' || type === 'DOUBLE PRECISION') return 'float';
+  if (type === 'TIMESTAMP') return 'timestamp';
+  if (type === 'BOOLEAN') return 'bool';
+  if (type === 'BYTEA') return 'bytes';
+  if (type === 'JSONB') return 'json';
+  return 'text';
 };
 
-const isUuidType = (col: SqlColumnNode) => col.sqlType.toUpperCase() === 'UUID';
+const isNumeric = (col: SqlColumnNode) => {
+  const k = kindOf(col);
+  return k === 'int' || k === 'float';
+};
+
+const maxLength = (col: SqlColumnNode): number | null => {
+  const match = col.sqlType.match(/\((\d+)\)/);
+  return match ? Number(match[1]) : null;
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+// Aceita "2024-05-30", "2024-05-30 14:00[:00]" e "30/05/2024 [14:00]".
+const parseTimestamp = (raw: string): string | null => {
+  let y: number;
+  let mo: number;
+  let d: number;
+  let m = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+  );
+  if (m) {
+    [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  } else {
+    m = raw.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
+    );
+    if (!m) return null;
+    [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  }
+  const h = Number(m[4] ?? 0);
+  const mi = Number(m[5] ?? 0);
+  const s = Number(m[6] ?? 0);
+  const date = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  const valid =
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === mo - 1 &&
+    date.getUTCDate() === d &&
+    h < 24 &&
+    mi < 60 &&
+    s < 60;
+  return valid
+    ? `${y}-${pad(mo)}-${pad(d)} ${pad(h)}:${pad(mi)}:${pad(s)}`
+    : null;
+};
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ParseResult =
+  | { ok: true; value: SimValue }
+  | { ok: false; error: string };
+
+// Converte o que o usuário digitou no valor do tipo da coluna.
+// Texto vazio vira NULL (quem chama decide se NULL é permitido).
+export function parseColumnInput(col: SqlColumnNode, raw: string): ParseResult {
+  const text = (raw ?? '').trim();
+  if (text === '') return { ok: true, value: null };
+
+  switch (kindOf(col)) {
+    case 'uuid':
+      return UUID_RE.test(text)
+        ? { ok: true, value: text.toLowerCase() }
+        : {
+            ok: false,
+            error: `"${text}" não é um UUID válido. Deixe vazio para o sistema gerar um automaticamente.`,
+          };
+    case 'int':
+      return /^-?\d+$/.test(text) && Math.abs(Number(text)) <= 2147483647
+        ? { ok: true, value: Number(text) }
+        : { ok: false, error: `"${text}" não é um número inteiro válido.` };
+    case 'float': {
+      const normalized = text.replace(',', '.');
+      return /^-?\d+(\.\d+)?$/.test(normalized)
+        ? { ok: true, value: Number(normalized) }
+        : { ok: false, error: `"${text}" não é um número válido.` };
+    }
+    case 'bool': {
+      const v = text.toLowerCase();
+      if (['true', 't', 'verdadeiro', 'sim', 's', '1'].includes(v)) {
+        return { ok: true, value: true };
+      }
+      if (['false', 'f', 'falso', 'nao', 'não', 'n', '0'].includes(v)) {
+        return { ok: true, value: false };
+      }
+      return {
+        ok: false,
+        error: `"${text}" não é um valor lógico. Use verdadeiro ou falso.`,
+      };
+    }
+    case 'timestamp': {
+      const ts = parseTimestamp(text);
+      return ts
+        ? { ok: true, value: ts }
+        : {
+            ok: false,
+            error: `"${text}" não é uma data válida. Use, por exemplo, 2024-05-30 ou 2024-05-30 14:00.`,
+          };
+    }
+    case 'json':
+      try {
+        JSON.parse(text);
+        return { ok: true, value: text };
+      } catch {
+        return { ok: false, error: `"${text}" não é um JSON válido.` };
+      }
+    case 'bytes':
+      return { ok: true, value: text };
+    default: {
+      const limit = maxLength(col);
+      if (limit !== null && text.length > limit) {
+        return {
+          ok: false,
+          error: `O texto tem ${text.length} caracteres e a coluna aceita no máximo ${limit}.`,
+        };
+      }
+      return { ok: true, value: text };
+    }
+  }
+}
+
+// Texto exibido/falado ao pedir o valor de uma coluna no INSERT.
+export function describeColumnPrompt(col: SqlColumnNode): {
+  title: string;
+  allowEmpty: boolean;
+} {
+  const kind = kindOf(col);
+  const typeText: Record<ColumnKind, string> = {
+    uuid: 'identificador UUID',
+    text: 'texto',
+    int: 'número inteiro',
+    float: 'número decimal',
+    timestamp: 'data e hora, por exemplo 2024-05-30 14:00',
+    bool: 'verdadeiro ou falso',
+    bytes: 'dado binário',
+    json: 'JSON',
+  };
+  let allowEmpty = true;
+  let hint = '';
+  if (kind === 'uuid' && col.isPrimaryKey && !col.isForeignKey) {
+    hint = 'Deixe vazio e pressione Enter para gerar automaticamente.';
+  } else if (col.nullable) {
+    hint = 'Deixe vazio e pressione Enter para NULL.';
+  } else {
+    allowEmpty = false;
+    hint = 'Preenchimento obrigatório.';
+  }
+  const flags = [col.isPrimaryKey ? 'chave primária' : '', col.unique ? 'valor único' : '']
+    .filter(Boolean)
+    .join(', ');
+  return {
+    title: `Valor de ${col.name.replace(/_/g, ' ')}. ${typeText[kind]}${
+      flags ? `, ${flags}` : ''
+    }. ${hint}`,
+    allowEmpty,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Utilidades
+// ---------------------------------------------------------------------------
 
 export const formatSqlLiteral = (value: SimValue): string => {
   if (value === null) return 'NULL';
@@ -64,222 +249,149 @@ export const formatSqlLiteral = (value: SimValue): string => {
   return `'${String(value).replace(/'/g, "''")}'`;
 };
 
-const nowText = () =>
-  new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-// Valor genérico para uma coluna "comum" (que não é chave estrangeira).
-export const sampleValue = (
-  col: SqlColumnNode,
-  n: number,
-  uuid: UuidFactory,
-  variant: 'new' | 'changed' = 'new',
-): SimValue => {
-  const type = col.sqlType.toUpperCase();
-  const changed = variant === 'changed';
-  if (type === 'UUID') return uuid();
-  // Texto genérico baseado no nome da coluna: coluna "nome" -> nome1, nome2...
-  if (type.startsWith('VARCHAR') || type === 'TEXT') {
-    return changed ? `${col.name}${n} alterado` : `${col.name}${n}`;
-  }
-  if (type === 'INTEGER') return changed ? n + 100 : n;
-  if (type === 'REAL' || type === 'DOUBLE PRECISION') {
-    return changed ? n + 100.5 : n + 0.5;
-  }
-  if (type === 'TIMESTAMP') return nowText();
-  if (type === 'BOOLEAN') return changed ? n % 2 === 0 : n % 2 === 1;
-  if (type === 'BYTEA') return changed ? '\\xFF00' : '\\x00FF';
-  if (type === 'JSONB') {
-    return changed
-      ? `{"exemplo": ${n}, "alterado": true}`
-      : `{"exemplo": ${n}}`;
-  }
-  return `${col.name}${n}`;
-};
-
-const findTable = (script: SqlScript, name: string) =>
-  script.tables.find((t) => t.name === name);
-
-const keyOf = (row: SimRow, columns: string[]) =>
-  JSON.stringify(columns.map((c) => row[c]));
-
-// Fala amigável de uma linha (omite UUIDs e dados binários: são ilegíveis
-// quando ouvidos).
-const speakRow = (table: SqlTableNode, row: SimRow): string => {
-  const parts = table.columns
-    .filter((c) => !isUuidType(c) && c.sqlType.toUpperCase() !== 'BYTEA')
-    .map((c) => `${c.name}: ${row[c.name] === null ? 'vazio' : row[c.name]}`);
-  return parts.length > 0 ? parts.join(', ') : 'apenas identificadores';
+const rowsOf = (state: SimState, table: SqlTableNode): SimRow[] => {
+  if (!state.rows[table.name]) state.rows[table.name] = [];
+  return state.rows[table.name];
 };
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
-// Texto que descreve, em linguagem comum, o que o comando faz.
-export const commandExplanations: Record<SimCommand, string> = {
-  SELECT:
-    'SELECT consulta a tabela e devolve as linhas guardadas, sem modificar nada.',
-  INSERT:
-    'INSERT adiciona uma nova linha (um novo registro) na tabela. Aqui o sistema preenche a linha com valores genéricos, só para exemplo.',
-  UPDATE:
-    'UPDATE altera os valores de uma linha que já existe. O WHERE indica qual linha será alterada; sem ele, todas as linhas seriam alteradas.',
-  DELETE:
-    'DELETE remove uma linha da tabela. O WHERE indica qual linha será removida; sem ele, a tabela inteira seria esvaziada.',
+// Fala de uma linha: omite UUIDs e dados binários (ilegíveis quando ouvidos).
+const speakRow = (columns: string[], row: SimRow, skip: Set<string>): string => {
+  const parts = columns
+    .filter((c) => !skip.has(c))
+    .map((c) => `${c.replace(/_/g, ' ')}: ${row[c] === null ? 'vazio' : row[c]}`);
+  return parts.length > 0 ? parts.join(', ') : 'apenas identificadores';
 };
 
-// ---------------------------------------------------------------------------
-// SELECT
-// ---------------------------------------------------------------------------
+const keyOf = (row: SimRow, columns: string[]) =>
+  JSON.stringify(columns.map((c) => row[c]));
 
-export function simulateSelect(
-  _script: SqlScript,
-  table: SqlTableNode,
-  state: SimState,
-): SimResult {
-  const rows = rowsOf(state, table);
-  const sql = `SELECT * FROM ${table.name};`;
-  if (rows.length === 0) {
-    return {
-      ok: true,
-      command: 'SELECT',
-      sql,
-      message:
-        'Consulta executada: nenhum registro encontrado. A tabela está vazia — experimente um INSERT.',
-      spoken:
-        'Consulta executada. A tabela está vazia, nenhum registro encontrado. Experimente inserir um registro.',
-      highlight: [],
-    };
-  }
-  const listed = rows
-    .slice(0, 5)
-    .map((row, i) => `Registro ${i + 1}: ${speakRow(table, row)}.`)
-    .join(' ');
-  const extra =
-    rows.length > 5 ? ` E mais ${rows.length - 5} registros na tela.` : '';
-  return {
-    ok: true,
-    command: 'SELECT',
-    sql,
-    message: `Consulta executada: ${plural(rows.length, 'registro retornado', 'registros retornados')}.`,
-    spoken: `Consulta executada: ${plural(rows.length, 'registro retornado', 'registros retornados')}. ${listed}${extra}`,
-    highlight: rows.map((_, i) => i),
-    highlightKind: 'selected',
-  };
-}
+const unreadable = (table: SqlTableNode) =>
+  new Set(
+    table.columns
+      .filter((c) => kindOf(c) === 'uuid' || kindOf(c) === 'bytes')
+      .map((c) => c.name),
+  );
 
 // ---------------------------------------------------------------------------
 // INSERT
 // ---------------------------------------------------------------------------
 
-// Testa se a linha candidata quebraria PK ou UNIQUE.
-const violatesUniqueness = (
-  table: SqlTableNode,
-  rows: SimRow[],
-  candidate: SimRow,
-): boolean => {
-  const pk = table.pkColumns;
-  if (pk.length > 0) {
-    const key = keyOf(candidate, pk);
-    if (rows.some((r) => keyOf(r, pk) === key)) return true;
-  }
-  return table.columns
-    .filter((c) => c.unique && !pk.includes(c.name))
-    .some(
-      (c) =>
-        candidate[c.name] !== null &&
-        rows.some((r) => r[c.name] === candidate[c.name]),
-    );
-};
+// Valores possíveis de uma chave estrangeira (chaves dos registros do pai).
+export function foreignKeyOptions(
+  script: SqlScript,
+  state: SimState,
+  col: SqlColumnNode,
+): { value: SimValue; label: string }[] {
+  const parent = script.tables.find((t) => t.name === col.references?.table);
+  if (!parent || !col.references) return [];
+  const skip = unreadable(parent);
+  const parentColumns = parent.columns.map((c) => c.name);
+  return rowsOf(state, parent).map((row, i) => ({
+    value: row[col.references!.column],
+    label: `Registro ${i + 1} de ${parent.name}: ${speakRow(parentColumns, row, skip)}`,
+  }));
+}
 
-export function simulateInsert(
+const failInsert = (table: SqlTableNode, message: string): SimResult => ({
+  ok: false,
+  command: 'INSERT',
+  sql: `INSERT INTO ${table.name} ...;`,
+  message: `Erro: ${message}`,
+  spoken: `Não foi possível inserir. ${message}`,
+  highlight: [],
+});
+
+// Insere um registro com os valores digitados pelo usuário.
+// `values` traz, por coluna, o texto digitado (ou o valor já escolhido, no caso
+// de chave estrangeira). Vazio = NULL (ou valor automático para a PK UUID).
+export function simulateInsertValues(
   script: SqlScript,
   table: SqlTableNode,
   state: SimState,
+  values: Record<string, SimValue | string>,
   uuid: UuidFactory = defaultUuid,
 ): SimResult {
   const rows = rowsOf(state, table);
-  const n = (state.counters[table.name] ?? 0) + 1;
-
-  const fkColumns = table.columns.filter((c) => c.isForeignKey && c.references);
-
-  // Para cada FK, os valores possíveis (chaves de registros existentes no pai).
-  const options = fkColumns.map((col) => {
-    const parent = findTable(script, col.references!.table);
-    const parentRows = parent ? rowsOf(state, parent) : [];
-    return parentRows.map((r) => r[col.references!.column] as SimValue);
-  });
-
-  // Uma FK obrigatória sem nenhum registro no pai é um erro real de banco.
-  for (let i = 0; i < fkColumns.length; i++) {
-    const col = fkColumns[i];
-    if (!col.nullable && options[i].length === 0) {
-      const parentName = col.references!.table;
-      return {
-        ok: false,
-        command: 'INSERT',
-        sql: `INSERT INTO ${table.name} ...;`,
-        message: `Erro: a coluna "${col.name}" é uma chave estrangeira obrigatória e a tabela "${parentName}" ainda não tem nenhum registro. Insira primeiro um registro em "${parentName}".`,
-        spoken: `Não foi possível inserir. A coluna ${col.name} precisa apontar para um registro existente na tabela ${parentName}, mas ela está vazia. Insira primeiro um registro em ${parentName}.`,
-        highlight: [],
-      };
-    }
-  }
-
-  // Monta a linha-base (colunas comuns).
-  const base: SimRow = {};
-  table.columns.forEach((col) => {
-    if (fkColumns.includes(col)) return;
-    base[col.name] = sampleValue(col, n, uuid);
-  });
-
-  // Procura uma combinação de FKs que não quebre PK/UNIQUE (produto cartesiano
-  // limitado — os diagramas de estudo são pequenos).
-  const combos: SimValue[][] = [];
-  const build = (idx: number, current: SimValue[]) => {
-    if (combos.length >= 500) return;
-    if (idx === fkColumns.length) {
-      combos.push([...current]);
-      return;
-    }
-    const pool: SimValue[] = [...options[idx]];
-    if (fkColumns[idx].nullable) pool.push(null);
-    pool.forEach((v) => build(idx + 1, [...current, v]));
-  };
-  build(0, []);
-
-  let chosen: SimRow | null = null;
-  for (const combo of combos) {
-    const candidate: SimRow = { ...base };
-    fkColumns.forEach((col, i) => {
-      candidate[col.name] = combo[i];
-    });
-    if (!violatesUniqueness(table, rows, candidate)) {
-      chosen = candidate;
-      break;
-    }
-  }
-
-  if (!chosen) {
-    const parents = Array.from(
-      new Set(fkColumns.map((c) => c.references!.table)),
-    ).join(' ou ');
-    return {
-      ok: false,
-      command: 'INSERT',
-      sql: `INSERT INTO ${table.name} ...;`,
-      message: `Erro: todas as combinações possíveis já existem em "${table.name}" (a chave primária ou uma restrição UNIQUE não permite repetição). Insira mais registros em ${parents} e tente de novo.`,
-      spoken: `Não foi possível inserir. Todas as combinações possíveis já existem na tabela ${table.name}. Insira mais registros em ${parents} e tente novamente.`,
-      highlight: [],
-    };
-  }
-
-  // Ordena as colunas na ordem da tabela.
   const row: SimRow = {};
-  table.columns.forEach((c) => {
-    row[c.name] = chosen![c.name];
-  });
+
+  for (const col of table.columns) {
+    const given = values[col.name];
+    let value: SimValue;
+
+    if (col.isForeignKey && col.references) {
+      // Valor já escolhido na lista de registros do pai.
+      value = given === undefined || given === '' ? null : (given as SimValue);
+    } else {
+      const parsed = parseColumnInput(
+        col,
+        given === null || given === undefined ? '' : String(given),
+      );
+      if (!parsed.ok) {
+        return failInsert(table, `coluna ${col.name}: ${parsed.error}`);
+      }
+      value = parsed.value;
+    }
+
+    if (
+      value === null &&
+      col.isPrimaryKey &&
+      kindOf(col) === 'uuid' &&
+      !col.isForeignKey
+    ) {
+      value = uuid();
+    }
+    if (value === null && !col.nullable) {
+      return failInsert(
+        table,
+        `a coluna ${col.name} é obrigatória e não pode ficar vazia.`,
+      );
+    }
+    row[col.name] = value;
+  }
+
+  // Chave estrangeira: o registro referenciado precisa existir.
+  for (const col of table.columns) {
+    if (!col.isForeignKey || !col.references || row[col.name] === null) continue;
+    const parent = script.tables.find((t) => t.name === col.references!.table);
+    const exists =
+      !!parent &&
+      rowsOf(state, parent).some(
+        (r) => r[col.references!.column] === row[col.name],
+      );
+    if (!exists) {
+      return failInsert(
+        table,
+        `a coluna ${col.name} aponta para um registro que não existe na tabela ${col.references.table}.`,
+      );
+    }
+  }
+
+  // Chave primária e UNIQUE.
+  const pk = table.pkColumns;
+  if (pk.length > 0 && rows.some((r) => keyOf(r, pk) === keyOf(row, pk))) {
+    return failInsert(
+      table,
+      `já existe um registro com essa chave primária (${pk.join(', ')}) na tabela ${table.name}.`,
+    );
+  }
+  for (const col of table.columns) {
+    if (
+      col.unique &&
+      !pk.includes(col.name) &&
+      row[col.name] !== null &&
+      rows.some((r) => r[col.name] === row[col.name])
+    ) {
+      return failInsert(
+        table,
+        `a coluna ${col.name} só aceita valores únicos e esse valor já existe.`,
+      );
+    }
+  }
 
   rows.push(row);
-  state.counters[table.name] = n;
 
   const columnsSql = table.columns.map((c) => c.name).join(', ');
   const valuesSql = table.columns
@@ -291,187 +403,412 @@ export function simulateInsert(
     command: 'INSERT',
     sql: `INSERT INTO ${table.name} (${columnsSql})\nVALUES (${valuesSql});`,
     message: `1 registro inserido. A tabela agora tem ${plural(rows.length, 'registro', 'registros')}.`,
-    spoken: `Registro inserido com valores genéricos. ${speakRow(table, row)}. A tabela agora tem ${plural(rows.length, 'registro', 'registros')}.`,
+    spoken: `Registro inserido. ${speakRow(
+      table.columns.map((c) => c.name),
+      row,
+      unreadable(table),
+    )}. A tabela agora tem ${plural(rows.length, 'registro', 'registros')}.`,
     highlight: [rows.length - 1],
-    highlightKind: 'inserted',
   };
 }
 
 // ---------------------------------------------------------------------------
-// UPDATE
+// SELECT
 // ---------------------------------------------------------------------------
 
-const whereClause = (table: SqlTableNode, row: SimRow) => {
-  const pk = table.pkColumns.length > 0 ? table.pkColumns : [table.columns[0].name];
-  return pk.map((c) => `${c} = ${formatSqlLiteral(row[c])}`).join(' AND ');
+export type AggFn = 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX';
+export const AGG_FUNCTIONS: AggFn[] = ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'];
+
+export type CompareOp =
+  | '='
+  | '<>'
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | 'LIKE'
+  | 'IS NULL'
+  | 'IS NOT NULL';
+export const COMPARE_OPS: CompareOp[] = [
+  '=',
+  '<>',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  'LIKE',
+  'IS NULL',
+  'IS NOT NULL',
+];
+export const HAVING_OPS: CompareOp[] = ['=', '<>', '>', '<', '>=', '<='];
+
+export interface SelectItem {
+  fn?: AggFn;
+  // Nome da coluna, ou '*' (todas as colunas / COUNT(*)).
+  column: string;
+}
+export interface Condition {
+  column: string;
+  op: CompareOp;
+  value?: string;
+}
+export interface HavingCondition {
+  fn: AggFn;
+  column: string;
+  op: CompareOp;
+  value: string;
+}
+export interface OrderBy {
+  // Nome de coluna da tabela OU rótulo de uma função (ex.: COUNT(*)).
+  column: string;
+  direction: 'ASC' | 'DESC';
+}
+export interface SelectQuery {
+  table: string | null;
+  items: SelectItem[];
+  where: Condition[];
+  groupBy: string[];
+  having: HavingCondition[];
+  orderBy: OrderBy[];
+  limit: number | null;
+}
+
+export const emptyQuery = (table: string | null = null): SelectQuery => ({
+  table,
+  items: [],
+  where: [],
+  groupBy: [],
+  having: [],
+  orderBy: [],
+  limit: null,
+});
+
+export const itemLabel = (item: SelectItem) =>
+  item.fn ? `${item.fn}(${item.column})` : item.column;
+
+const conditionSql = (
+  col: SqlColumnNode | undefined,
+  label: string,
+  op: CompareOp,
+  value: string | undefined,
+) => {
+  if (op === 'IS NULL' || op === 'IS NOT NULL') return `${label} ${op}`;
+  const numeric = col ? isNumeric(col) : /^-?\d+([.,]\d+)?$/.test(value ?? '');
+  const bool = col ? kindOf(col) === 'bool' : false;
+  const literal =
+    numeric || bool
+      ? String(value ?? '').replace(',', '.')
+      : formatSqlLiteral(value ?? '');
+  return `${label} ${op} ${literal}`;
 };
 
-export function simulateUpdate(
+export function buildSelectSql(
+  query: SelectQuery,
+  table?: SqlTableNode,
+): string {
+  const colOf = (name: string) => table?.columns.find((c) => c.name === name);
+  const lines: string[] = [];
+  lines.push(
+    `SELECT ${query.items.length ? query.items.map(itemLabel).join(', ') : '*'}`,
+  );
+  lines.push(`FROM ${query.table ?? '...'}`);
+  if (query.where.length) {
+    lines.push(
+      `WHERE ${query.where
+        .map((w) => conditionSql(colOf(w.column), w.column, w.op, w.value))
+        .join(' AND ')}`,
+    );
+  }
+  if (query.groupBy.length) lines.push(`GROUP BY ${query.groupBy.join(', ')}`);
+  if (query.having.length) {
+    lines.push(
+      `HAVING ${query.having
+        .map((h) => conditionSql(undefined, `${h.fn}(${h.column})`, h.op, h.value))
+        .join(' AND ')}`,
+    );
+  }
+  if (query.orderBy.length) {
+    lines.push(
+      `ORDER BY ${query.orderBy.map((o) => `${o.column} ${o.direction}`).join(', ')}`,
+    );
+  }
+  if (query.limit !== null) lines.push(`LIMIT ${query.limit}`);
+  return `${lines.join('\n')};`;
+}
+
+const failSelect = (sql: string, message: string): SimResult => ({
+  ok: false,
+  command: 'SELECT',
+  sql,
+  message: `Erro: ${message}`,
+  spoken: `Não foi possível executar a consulta. ${message}`,
+  highlight: [],
+});
+
+const likeToRegex = (pattern: string) =>
+  new RegExp(
+    `^${pattern
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/%/g, '.*')
+      .replace(/_/g, '.')}$`,
+  );
+
+// Converte o texto digitado em um valor comparável com a coluna.
+const comparable = (col: SqlColumnNode, raw: string): SimValue => {
+  const parsed = parseColumnInput(col, raw);
+  return parsed.ok ? parsed.value : raw;
+};
+
+const compare = (a: SimValue, op: CompareOp, b: SimValue): boolean => {
+  if (op === 'IS NULL') return a === null;
+  if (op === 'IS NOT NULL') return a !== null;
+  if (a === null || b === null) return false; // NULL nunca é igual/maior/menor
+  switch (op) {
+    case '=':
+      return a === b;
+    case '<>':
+      return a !== b;
+    case '>':
+      return a > b;
+    case '<':
+      return a < b;
+    case '>=':
+      return a >= b;
+    case '<=':
+      return a <= b;
+    case 'LIKE':
+      return likeToRegex(String(b)).test(String(a));
+    default:
+      return false;
+  }
+};
+
+const round = (n: number) => Math.round(n * 1e6) / 1e6;
+
+const aggregate = (fn: AggFn, column: string, group: SimRow[]): SimValue => {
+  if (fn === 'COUNT') {
+    return column === '*'
+      ? group.length
+      : group.filter((r) => r[column] !== null && r[column] !== undefined).length;
+  }
+  const values = group
+    .map((r) => r[column])
+    .filter((v): v is string | number | boolean => v !== null && v !== undefined);
+  if (values.length === 0) return null;
+  if (fn === 'MIN' || fn === 'MAX') {
+    return values.reduce((best, v) =>
+      fn === 'MIN' ? (v < best ? v : best) : v > best ? v : best,
+    );
+  }
+  const nums = values.map(Number);
+  const sum = nums.reduce((a, b) => a + b, 0);
+  // AVG com 2 casas decimais fica mais legível para quem está aprendendo.
+  return fn === 'SUM' ? round(sum) : Math.round((sum / nums.length) * 100) / 100;
+};
+
+export function simulateSelect(
   _script: SqlScript,
   table: SqlTableNode,
   state: SimState,
-  uuid: UuidFactory = defaultUuid,
+  query: SelectQuery,
 ): SimResult {
-  const rows = rowsOf(state, table);
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      command: 'UPDATE',
-      sql: `UPDATE ${table.name} SET ... WHERE ...;`,
-      message:
-        'Nada para alterar: a tabela está vazia. Faça um INSERT primeiro.',
-      spoken:
-        'Nada para alterar, a tabela está vazia. Faça um insert primeiro.',
-      highlight: [],
-    };
-  }
+  const sql = buildSelectSql(query, table);
+  const colOf = (name: string) => table.columns.find((c) => c.name === name);
 
-  // Só colunas comuns são alteradas (chaves não mudam num UPDATE simples).
-  const editable = table.columns.filter(
-    (c) => !c.isPrimaryKey && !c.isForeignKey,
-  );
-  if (editable.length === 0) {
-    return {
-      ok: false,
-      command: 'UPDATE',
-      sql: `UPDATE ${table.name} SET ... WHERE ...;`,
-      message:
-        'Esta tabela só tem colunas de chave (identificadores), que normalmente não são alteradas. Não há o que atualizar.',
-      spoken:
-        'Esta tabela só tem colunas de chave, que normalmente não são alteradas. Não há o que atualizar.',
-      highlight: [],
-    };
-  }
+  // --- Validações (mesmas regras de um banco de verdade) -------------------
+  const hasAgg = query.items.some((i) => i.fn) || query.having.length > 0;
+  const grouped = hasAgg || query.groupBy.length > 0;
 
-  const index = 0;
-  const target = rows[index];
-  const n = state.counters[table.name] ?? 1;
-  const where = whereClause(table, target);
-
-  const changes = editable.slice(0, 2).map((col) => {
-    const previous = target[col.name];
-    const type = col.sqlType.toUpperCase();
-    // Texto: acrescenta " alterado" ao valor que já estava (nome1 -> nome1 alterado).
-    const value =
-      typeof previous === 'string' &&
-      (type.startsWith('VARCHAR') || type === 'TEXT')
-        ? `${previous} alterado`
-        : sampleValue(col, n, uuid, 'changed');
-    target[col.name] = value;
-    return { col, value };
-  });
-
-  const setSql = changes
-    .map(({ col, value }) => `${col.name} = ${formatSqlLiteral(value)}`)
-    .join(', ');
-
-  return {
-    ok: true,
-    command: 'UPDATE',
-    sql: `UPDATE ${table.name}\nSET ${setSql}\nWHERE ${where};`,
-    message: `1 registro alterado (o primeiro da tabela): ${changes.map((c) => c.col.name).join(', ')}.`,
-    spoken: `Registro alterado. Foi atualizado o primeiro registro da tabela, nas colunas ${changes.map((c) => c.col.name).join(' e ')}. Os outros registros não mudaram.`,
-    highlight: [index],
-    highlightKind: 'updated',
-  };
-}
-
-// ---------------------------------------------------------------------------
-// DELETE (respeita chaves estrangeiras: bloqueia ou apaga em cascata)
-// ---------------------------------------------------------------------------
-
-// Tabelas/colunas que referenciam a tabela alvo.
-const dependentsOf = (script: SqlScript, table: SqlTableNode) =>
-  script.tables.flatMap((t) =>
-    t.columns
-      .filter((c) => c.references?.table === table.name)
-      .map((c) => ({ table: t, column: c })),
-  );
-
-// Apaga em cascata; devolve quantas linhas foram apagadas por tabela.
-const cascadeDelete = (
-  script: SqlScript,
-  table: SqlTableNode,
-  state: SimState,
-  row: SimRow,
-  removed: Record<string, number>,
-) => {
-  const rows = rowsOf(state, table);
-  const idx = rows.indexOf(row);
-  if (idx >= 0) {
-    rows.splice(idx, 1);
-    removed[table.name] = (removed[table.name] ?? 0) + 1;
-  }
-  dependentsOf(script, table).forEach(({ table: child, column }) => {
-    if (column.onDelete !== 'CASCADE') return;
-    const value = row[column.references!.column];
-    const childRows = rowsOf(state, child).filter(
-      (r) => r[column.name] === value,
-    );
-    childRows.forEach((r) => cascadeDelete(script, child, state, r, removed));
-  });
-};
-
-export function simulateDelete(
-  script: SqlScript,
-  table: SqlTableNode,
-  state: SimState,
-): SimResult {
-  const rows = rowsOf(state, table);
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      command: 'DELETE',
-      sql: `DELETE FROM ${table.name} WHERE ...;`,
-      message: 'Nada para excluir: a tabela está vazia. Faça um INSERT primeiro.',
-      spoken: 'Nada para excluir, a tabela está vazia. Faça um insert primeiro.',
-      highlight: [],
-    };
-  }
-
-  const target = rows[rows.length - 1];
-  const where = whereClause(table, target);
-  const sql = `DELETE FROM ${table.name}\nWHERE ${where};`;
-
-  // Registros em outras tabelas que dependem deste?
-  const blockers = dependentsOf(script, table).filter(
-    ({ table: child, column }) =>
-      column.onDelete !== 'CASCADE' &&
-      rowsOf(state, child).some(
-        (r) => r[column.name] === target[column.references!.column],
-      ),
-  );
-  if (blockers.length > 0) {
-    const names = Array.from(new Set(blockers.map((b) => b.table.name))).join(
-      ', ',
-    );
-    return {
-      ok: false,
-      command: 'DELETE',
+  if (query.items.length === 0 && grouped) {
+    return failSelect(
       sql,
-      message: `Erro: o registro não pode ser excluído porque há registros em "${names}" que dependem dele (chave estrangeira). Exclua primeiro os registros dependentes.`,
-      spoken: `Não foi possível excluir. Existem registros na tabela ${names} que dependem deste registro. Exclua primeiro os registros dependentes.`,
+      'com GROUP BY ou função agregada, escolha as colunas no SELECT em vez de usar o asterisco.',
+    );
+  }
+  for (const item of query.items) {
+    if (item.fn && ['SUM', 'AVG'].includes(item.fn)) {
+      const col = colOf(item.column);
+      if (!col || !isNumeric(col)) {
+        return failSelect(
+          sql,
+          `${item.fn} só funciona em colunas numéricas, e ${item.column} não é numérica.`,
+        );
+      }
+    }
+    if (!item.fn && grouped && !query.groupBy.includes(item.column)) {
+      return failSelect(
+        sql,
+        `a coluna ${item.column} precisa estar no GROUP BY ou dentro de uma função agregada.`,
+      );
+    }
+  }
+  for (const h of query.having) {
+    if (['SUM', 'AVG'].includes(h.fn)) {
+      const col = colOf(h.column);
+      if (!col || !isNumeric(col)) {
+        return failSelect(
+          sql,
+          `${h.fn} só funciona em colunas numéricas, e ${h.column} não é numérica.`,
+        );
+      }
+    }
+    if (Number.isNaN(Number(h.value.replace(',', '.')))) {
+      return failSelect(sql, `o valor "${h.value}" do HAVING precisa ser um número.`);
+    }
+  }
+  for (const w of query.where) {
+    const col = colOf(w.column);
+    if (!col) {
+      return failSelect(sql, `a coluna ${w.column} não existe na tabela ${table.name}.`);
+    }
+    if (w.op === 'LIKE' && kindOf(col) !== 'text') {
+      return failSelect(sql, 'LIKE só funciona em colunas de texto.');
+    }
+    if (w.op !== 'IS NULL' && w.op !== 'IS NOT NULL') {
+      const parsed = parseColumnInput(col, w.value ?? '');
+      if (!parsed.ok || parsed.value === null) {
+        return failSelect(
+          sql,
+          `valor inválido no WHERE para ${w.column}: ${parsed.ok ? 'informe um valor.' : parsed.error}`,
+        );
+      }
+    }
+  }
+
+  // --- Execução --------------------------------------------------------------
+  // WHERE (condições combinadas com AND)
+  const source = rowsOf(state, table).filter((row) =>
+    query.where.every((w) => {
+      const col = colOf(w.column) as SqlColumnNode;
+      return compare(row[w.column], w.op, comparable(col, w.value ?? ''));
+    }),
+  );
+
+  let columns: string[];
+  let out: SimRow[] = [];
+
+  if (grouped) {
+    const groups = new Map<string, SimRow[]>();
+    if (query.groupBy.length === 0) {
+      groups.set('all', source); // só agregados: um único grupo
+    } else {
+      source.forEach((row) => {
+        const key = keyOf(row, query.groupBy);
+        groups.set(key, [...(groups.get(key) ?? []), row]);
+      });
+    }
+    columns = query.items.map(itemLabel);
+    groups.forEach((group) => {
+      const havingOk = query.having.every((h) =>
+        compare(
+          aggregate(h.fn, h.column, group),
+          h.op,
+          Number(h.value.replace(',', '.')),
+        ),
+      );
+      if (!havingOk) return;
+      const row: SimRow = {};
+      query.items.forEach((item) => {
+        row[itemLabel(item)] = item.fn
+          ? aggregate(item.fn, item.column, group)
+          : (group[0]?.[item.column] ?? null);
+      });
+      query.groupBy.forEach((g) => {
+        if (!(g in row)) row[`__${g}`] = group[0]?.[g] ?? null;
+      });
+      out.push(row);
+    });
+  } else {
+    columns =
+      query.items.length === 0 || query.items.some((i) => i.column === '*')
+        ? table.columns.map((c) => c.name)
+        : query.items.map(itemLabel);
+    out = source.map((row) => {
+      const o: SimRow = {};
+      columns.forEach((c) => {
+        o[c] = row[c];
+      });
+      // Colunas originais ficam acessíveis para ORDER BY em coluna não exibida.
+      table.columns.forEach((c) => {
+        if (!(c.name in o)) o[`__${c.name}`] = row[c.name];
+      });
+      return o;
+    });
+  }
+
+  // ORDER BY
+  for (const ob of query.orderBy) {
+    const available =
+      columns.includes(ob.column) || out.some((r) => `__${ob.column}` in r);
+    if (!available && out.length > 0) {
+      return failSelect(
+        sql,
+        `o ORDER BY usa ${ob.column}, que precisa estar no GROUP BY ou no SELECT quando há agrupamento.`,
+      );
+    }
+  }
+  if (query.orderBy.length > 0) {
+    out.sort((a, b) => {
+      for (const ob of query.orderBy) {
+        const av = ob.column in a ? a[ob.column] : a[`__${ob.column}`];
+        const bv = ob.column in b ? b[ob.column] : b[`__${ob.column}`];
+        if (av === bv) continue;
+        if (av === null) return 1; // NULL no fim
+        if (bv === null) return -1;
+        const cmp = av < bv ? -1 : 1;
+        return ob.direction === 'ASC' ? cmp : -cmp;
+      }
+      return 0;
+    });
+  }
+
+  // LIMIT
+  if (query.limit !== null) out = out.slice(0, query.limit);
+
+  // Remove as colunas auxiliares.
+  const finalRows = out.map((r) => {
+    const clean: SimRow = {};
+    columns.forEach((c) => {
+      clean[c] = r[c];
+    });
+    return clean;
+  });
+
+  if (finalRows.length === 0) {
+    return {
+      ok: true,
+      command: 'SELECT',
+      sql,
+      message: 'Consulta executada: nenhum registro encontrado.',
+      spoken: 'Consulta executada. Nenhum registro encontrado.',
       highlight: [],
+      resultSet: { columns, rows: [] },
     };
   }
 
-  const removed: Record<string, number> = {};
-  cascadeDelete(script, table, state, target, removed);
-
-  const cascaded = Object.entries(removed).filter(([name]) => name !== table.name);
-  const cascadeText =
-    cascaded.length > 0
-      ? ` Em cascata (ON DELETE CASCADE), também foram removidos: ${cascaded
-          .map(([name, count]) => `${plural(count, 'registro', 'registros')} de "${name}"`)
-          .join(', ')}.`
+  const skip = new Set(
+    columns.filter((label) => {
+      const col = colOf(label);
+      return !!col && (kindOf(col) === 'uuid' || kindOf(col) === 'bytes');
+    }),
+  );
+  const listed = finalRows
+    .slice(0, 5)
+    .map((row, i) => `Registro ${i + 1}: ${speakRow(columns, row, skip)}.`)
+    .join(' ');
+  const extra =
+    finalRows.length > 5
+      ? ` E mais ${finalRows.length - 5} registros na tela.`
       : '';
+  const count = plural(finalRows.length, 'registro retornado', 'registros retornados');
 
   return {
     ok: true,
-    command: 'DELETE',
+    command: 'SELECT',
     sql,
-    message: `1 registro excluído (o último da tabela). Restam ${plural(rows.length, 'registro', 'registros')}.${cascadeText}`,
-    spoken: `Registro excluído, o último da tabela. Restam ${plural(rows.length, 'registro', 'registros')}.${cascadeText}`,
+    message: `Consulta executada: ${count}.`,
+    spoken: `Consulta executada: ${count}. ${listed}${extra}`,
     highlight: [],
+    resultSet: { columns, rows: finalRows },
   };
 }
