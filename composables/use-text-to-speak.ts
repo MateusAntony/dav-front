@@ -49,6 +49,17 @@ export function useTTS() {
     tts.addPhraseToHistory(phrase);
   };
 
+  // Fala depois que a fala em andamento terminar. Ao trocar de menu, o título
+  // da nova tela é falado logo em seguida; falar o resultado de uma ação
+  // (ex.: "Registro inserido") imediatamente faria o título cortá-lo.
+  const speakAfterCurrent = async (phrase: string, force = false) => {
+    await new Promise((resolve) => setTimeout(resolve, 350)); // título começa
+    for (let i = 0; i < 40 && speechSynthesis.speaking; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    await speakPhrase(phrase, force);
+  };
+
   // Fala uma lista de frases em sequência, uma depois da outra, sem cortar
   // a anterior no meio (necessário para "ouvir tabela inteira"/"ouvir tudo").
   const speakSequence = async (phrases: string[], force = false) => {
@@ -96,6 +107,7 @@ export function useTTS() {
     voicesReady,
     loadVoices,
     speakPhrase,
+    speakAfterCurrent,
     speakSequence,
     updateTTSPreferences,
     stopSpeaking,
