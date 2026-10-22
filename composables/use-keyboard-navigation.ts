@@ -13,6 +13,7 @@ function createKeyboardNavigation() {
   const ttsStore = useTtsStore();
   const tts = useTTS();
   const diagramTool = useDiagram();
+  const backHandler = useBackHandler();
   const updateFocusableElements = () => {
     focusableElements.value = Array.from(
       document.querySelectorAll(
@@ -70,7 +71,10 @@ function createKeyboardNavigation() {
       focusableElements.value[nextIndex]?.focus();
       event.preventDefault();
     } else if (event.code === 'Escape') {
-      if (menuStore.activeMainMenu === PDVMenusEnum.PROJECTS) {
+      if (backHandler.handle()) {
+        // Havia um passo interno (formulário/consulta): só ele foi desfeito.
+        event.preventDefault();
+      } else if (menuStore.activeMainMenu === PDVMenusEnum.PROJECTS) {
         diagramTool.saveDiagram().catch((error: unknown) => {
           console.error('Erro ao salvar diagrama:', error);
         });

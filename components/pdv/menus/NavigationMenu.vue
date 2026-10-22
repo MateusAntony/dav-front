@@ -40,7 +40,10 @@ const options = ref([
 const menu = useMenuOptions();
 const tts = useTTS();
 const diagramTool = useDiagram();
+const backHandler = useBackHandler();
 async function handleBack() {
+  // Se a tela tem um passo interno (INSERT, montagem do SELECT), volta só ele.
+  if (backHandler.handle()) return;
   if (menu.activeMainMenu === PDVMenusEnum.PROJECTS) {
     try {
       await diagramTool.saveDiagram();
