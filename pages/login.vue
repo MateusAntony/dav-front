@@ -7,6 +7,7 @@
     <FocusableInput
       :title="t('auth.login.password')"
       v-model="password"
+      type="password"
       :autofocus="false"
       @submit="handleLogin"
     />

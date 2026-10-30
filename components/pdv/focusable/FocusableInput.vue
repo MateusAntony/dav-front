@@ -8,6 +8,7 @@
       v-model="inputValue"
       class="focusable-input"
       :title="title"
+      :type="type"
       autocomplete="off"
       autocorrect="off"
       autocapitalize="off"
@@ -29,10 +30,13 @@ interface FocusableInputProps {
   // Foca o campo ao abrir a tela. Em telas com vários campos, só o primeiro
   // deve ter foco inicial (senão o último campo montado "rouba" o foco).
   autofocus?: boolean;
+  // 'password' mostra o texto como pontos e NÃO fala o que foi digitado.
+  type?: 'text' | 'password';
 }
 
 const props = withDefaults(defineProps<FocusableInputProps>(), {
   autofocus: true,
+  type: 'text',
 });
 
 const inputValue = ref(props.modelValue);
@@ -49,8 +53,13 @@ const debouncedAddPhraseToQueue = debounce((phrase: string) => {
 
 const handleInput = (event: any) => {
   if (inputValue.value) {
+    // Fala a tecla digitada (letra ou número) — na senha também, porque quem
+    // usa voz precisa saber o que digitou. O campo de senha continua mascarado.
     speakPhrase(event.target.value.charAt(inputValue.value.length - 1));
-    debouncedAddPhraseToQueue(event.target.value);
+    // O texto inteiro, repetido 1,5 s depois, não é falado na senha.
+    if (props.type !== 'password') {
+      debouncedAddPhraseToQueue(event.target.value);
+    }
   }
 };
 
