@@ -20,7 +20,7 @@ export interface SimState {
   rows: Record<string, SimRow[]>;
 }
 
-export type SimCommand = 'SELECT' | 'INSERT';
+export type SimCommand = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE';
 
 export interface SimResultSet {
   columns: string[];
@@ -254,6 +254,9 @@ const rowsOf = (state: SimState, table: SqlTableNode): SimRow[] => {
   return state.rows[table.name];
 };
 
+// Frase falada começa com maiúscula ("Não foi possível alterar. A tabela...").
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
@@ -300,7 +303,7 @@ const failInsert = (table: SqlTableNode, message: string): SimResult => ({
   command: 'INSERT',
   sql: `INSERT INTO ${table.name} ...;`,
   message: `Erro: ${message}`,
-  spoken: `Não foi possível inserir. ${message}`,
+  spoken: `Não foi possível inserir. ${sentence(message)}`,
   highlight: [],
 });
 
@@ -541,7 +544,7 @@ const failSelect = (sql: string, message: string): SimResult => ({
   command: 'SELECT',
   sql,
   message: `Erro: ${message}`,
-  spoken: `Não foi possível executar a consulta. ${message}`,
+  spoken: `Não foi possível executar a consulta. ${sentence(message)}`,
   highlight: [],
 });
 
@@ -606,6 +609,39 @@ const aggregate = (fn: AggFn, column: string, group: SimRow[]): SimValue => {
   return fn === 'SUM' ? round(sum) : Math.round((sum / nums.length) * 100) / 100;
 };
 
+// Valida as condições do WHERE. Devolve a mensagem de erro, ou null se estão
+// certas. As mesmas regras valem para SELECT, UPDATE e DELETE.
+function validateWhere(table: SqlTableNode, where: Condition[]): string | null {
+  for (const w of where) {
+    const col = table.columns.find((c) => c.name === w.column);
+    if (!col) {
+      return `a coluna ${w.column} não existe na tabela ${table.name}.`;
+    }
+    if (w.op === 'LIKE' && kindOf(col) !== 'text') {
+      return 'LIKE só funciona em colunas de texto.';
+    }
+    if (w.op !== 'IS NULL' && w.op !== 'IS NOT NULL') {
+      const parsed = parseColumnInput(col, w.value ?? '');
+      if (!parsed.ok || parsed.value === null) {
+        return `valor inválido no WHERE para ${w.column}: ${parsed.ok ? 'informe um valor.' : parsed.error}`;
+      }
+    }
+  }
+  return null;
+}
+
+// Condições combinadas com AND. Sem condições, toda linha atende.
+function matchesWhere(
+  table: SqlTableNode,
+  row: SimRow,
+  where: Condition[],
+): boolean {
+  return where.every((w) => {
+    const col = table.columns.find((c) => c.name === w.column) as SqlColumnNode;
+    return compare(row[w.column], w.op, comparable(col, w.value ?? ''));
+  });
+}
+
 export function simulateSelect(
   _script: SqlScript,
   table: SqlTableNode,
@@ -656,32 +692,13 @@ export function simulateSelect(
       return failSelect(sql, `o valor "${h.value}" do HAVING precisa ser um número.`);
     }
   }
-  for (const w of query.where) {
-    const col = colOf(w.column);
-    if (!col) {
-      return failSelect(sql, `a coluna ${w.column} não existe na tabela ${table.name}.`);
-    }
-    if (w.op === 'LIKE' && kindOf(col) !== 'text') {
-      return failSelect(sql, 'LIKE só funciona em colunas de texto.');
-    }
-    if (w.op !== 'IS NULL' && w.op !== 'IS NOT NULL') {
-      const parsed = parseColumnInput(col, w.value ?? '');
-      if (!parsed.ok || parsed.value === null) {
-        return failSelect(
-          sql,
-          `valor inválido no WHERE para ${w.column}: ${parsed.ok ? 'informe um valor.' : parsed.error}`,
-        );
-      }
-    }
-  }
+  const whereError = validateWhere(table, query.where);
+  if (whereError) return failSelect(sql, whereError);
 
   // --- Execução --------------------------------------------------------------
   // WHERE (condições combinadas com AND)
   const source = rowsOf(state, table).filter((row) =>
-    query.where.every((w) => {
-      const col = colOf(w.column) as SqlColumnNode;
-      return compare(row[w.column], w.op, comparable(col, w.value ?? ''));
-    }),
+    matchesWhere(table, row, query.where),
   );
 
   let columns: string[];
@@ -810,5 +827,274 @@ export function simulateSelect(
     spoken: `Consulta executada: ${count}. ${listed}${extra}`,
     highlight: [],
     resultSet: { columns, rows: finalRows },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE e DELETE
+// ---------------------------------------------------------------------------
+
+export interface SetAssignment {
+  column: string;
+  // Texto digitado pelo usuário — ou, em chave estrangeira, o valor escolhido
+  // na lista de registros da tabela pai. Vazio/null = NULL.
+  value: string | SimValue;
+}
+export interface WriteQuery {
+  sets: SetAssignment[];
+  where: Condition[];
+}
+export const emptyWriteQuery = (): WriteQuery => ({ sets: [], where: [] });
+
+// Colunas que podem aparecer no SET. A chave primária não é alterada aqui:
+// outras tabelas podem referenciá-la.
+export const settableColumns = (table: SqlTableNode): SqlColumnNode[] =>
+  table.columns.filter((c) => !c.isPrimaryKey);
+
+const setLiteral = (col: SqlColumnNode | undefined, value: SetAssignment['value']) => {
+  if (value === null || value === undefined || value === '') return 'NULL';
+  if (col?.isForeignKey) return formatSqlLiteral(value as SimValue);
+  const parsed = col ? parseColumnInput(col, String(value)) : null;
+  return parsed && parsed.ok
+    ? formatSqlLiteral(parsed.value)
+    : formatSqlLiteral(String(value));
+};
+
+const whereSql = (table: SqlTableNode | undefined, where: Condition[]) => {
+  const colOf = (name: string) => table?.columns.find((c) => c.name === name);
+  return `WHERE ${where
+    .map((w) => conditionSql(colOf(w.column), w.column, w.op, w.value))
+    .join(' AND ')}`;
+};
+
+export function buildUpdateSql(
+  tableName: string,
+  query: WriteQuery,
+  table?: SqlTableNode,
+): string {
+  const colOf = (name: string) => table?.columns.find((c) => c.name === name);
+  const lines = [`UPDATE ${tableName}`];
+  lines.push(
+    `SET ${
+      query.sets.length
+        ? query.sets
+            .map((s) => `${s.column} = ${setLiteral(colOf(s.column), s.value)}`)
+            .join(', ')
+        : '...'
+    }`,
+  );
+  if (query.where.length) lines.push(whereSql(table, query.where));
+  return `${lines.join('\n')};`;
+}
+
+export function buildDeleteSql(
+  tableName: string,
+  query: WriteQuery,
+  table?: SqlTableNode,
+): string {
+  const lines = [`DELETE FROM ${tableName}`];
+  if (query.where.length) lines.push(whereSql(table, query.where));
+  return `${lines.join('\n')};`;
+}
+
+const failWrite = (
+  command: 'UPDATE' | 'DELETE',
+  sql: string,
+  message: string,
+): SimResult => ({
+  ok: false,
+  command,
+  sql,
+  message: `Erro: ${message}`,
+  spoken: `Não foi possível ${command === 'UPDATE' ? 'alterar' : 'excluir'}. ${sentence(message)}`,
+  highlight: [],
+});
+
+export function simulateUpdate(
+  script: SqlScript,
+  table: SqlTableNode,
+  state: SimState,
+  query: WriteQuery,
+): SimResult {
+  const sql = buildUpdateSql(table.name, query, table);
+  const fail = (message: string) => failWrite('UPDATE', sql, message);
+
+  // O UPDATE só faz sentido se já existe algum registro: é preciso um INSERT antes.
+  if (rowsOf(state, table).length === 0) {
+    return fail('a tabela não tem registros. Faça um INSERT antes de usar o UPDATE.');
+  }
+
+  if (query.sets.length === 0) {
+    return fail('escolha ao menos uma coluna para alterar no SET.');
+  }
+
+  // --- Valida e converte os novos valores ------------------------------------
+  const assign: SimRow = {};
+  for (const s of query.sets) {
+    const col = table.columns.find((c) => c.name === s.column);
+    if (!col) return fail(`a coluna ${s.column} não existe na tabela ${table.name}.`);
+    if (col.isPrimaryKey) {
+      return fail(
+        `a coluna ${col.name} é chave primária e não pode ser alterada nesta simulação.`,
+      );
+    }
+    let value: SimValue;
+    if (col.isForeignKey && col.references) {
+      value = s.value === '' || s.value === undefined ? null : (s.value as SimValue);
+      if (value !== null) {
+        const parent = script.tables.find((t) => t.name === col.references!.table);
+        const exists =
+          !!parent &&
+          rowsOf(state, parent).some((r) => r[col.references!.column] === value);
+        if (!exists) {
+          return fail(
+            `a coluna ${col.name} aponta para um registro que não existe na tabela ${col.references.table}.`,
+          );
+        }
+      }
+    } else {
+      const parsed = parseColumnInput(col, s.value === null ? '' : String(s.value));
+      if (!parsed.ok) return fail(`coluna ${col.name}: ${parsed.error}`);
+      value = parsed.value;
+    }
+    if (value === null && !col.nullable) {
+      return fail(`a coluna ${col.name} é obrigatória e não pode ficar vazia.`);
+    }
+    assign[col.name] = value;
+  }
+
+  const whereError = validateWhere(table, query.where);
+  if (whereError) return fail(whereError);
+
+  // --- Aplica em uma cópia; só grava se tudo estiver certo -------------------
+  const rows = rowsOf(state, table);
+  const matched = rows.filter((r) => matchesWhere(table, r, query.where));
+  const matchedSet = new Set(matched);
+  const next = rows.map((r) => (matchedSet.has(r) ? { ...r, ...assign } : r));
+
+  for (const col of table.columns) {
+    if (!col.unique || !(col.name in assign) || matched.length === 0) continue;
+    const seen = new Set<SimValue>();
+    for (const r of next) {
+      const v = r[col.name];
+      if (v === null) continue;
+      if (seen.has(v)) {
+        return fail(`a coluna ${col.name} só aceita valores únicos e esse valor ficaria repetido.`);
+      }
+      seen.add(v);
+    }
+  }
+
+  state.rows[table.name] = next;
+  const changed = Object.keys(assign).map((c) => c.replace(/_/g, ' '));
+  const count = plural(matched.length, 'registro alterado', 'registros alterados');
+  const highlight = next
+    .map((r, i) => (matchedSet.has(rows[i]) ? i : -1))
+    .filter((i) => i >= 0);
+
+  return {
+    ok: true,
+    command: 'UPDATE',
+    sql,
+    message:
+      matched.length === 0
+        ? 'Nenhum registro atende ao WHERE: nada foi alterado.'
+        : `${count}.`,
+    spoken:
+      matched.length === 0
+        ? 'Nenhum registro atende à condição. Nada foi alterado.'
+        : `${count}. Colunas atualizadas: ${changed.join(' e ')}.`,
+    highlight,
+  };
+}
+
+// Tabelas/colunas que referenciam a tabela (chaves estrangeiras que apontam
+// para ela).
+const dependentsOf = (script: SqlScript, table: SqlTableNode) =>
+  script.tables.flatMap((t) =>
+    t.columns
+      .filter((c) => c.references?.table === table.name)
+      .map((column) => ({ table: t, column })),
+  );
+
+export function simulateDelete(
+  script: SqlScript,
+  table: SqlTableNode,
+  state: SimState,
+  query: WriteQuery,
+): SimResult {
+  const sql = buildDeleteSql(table.name, query, table);
+  const fail = (message: string) => failWrite('DELETE', sql, message);
+
+  const whereError = validateWhere(table, query.where);
+  if (whereError) return fail(whereError);
+
+  const rows = rowsOf(state, table);
+  const matched = rows.filter((r) => matchesWhere(table, r, query.where));
+
+  if (matched.length === 0) {
+    return {
+      ok: true,
+      command: 'DELETE',
+      sql,
+      message: 'Nenhum registro atende ao WHERE: nada foi excluído.',
+      spoken: 'Nenhum registro atende à condição. Nada foi excluído.',
+      highlight: [],
+    };
+  }
+
+  // Monta tudo o que seria apagado (inclusive em cascata) ANTES de apagar:
+  // se qualquer linha for bloqueada por uma chave estrangeira, nada é apagado.
+  const planned = new Map<string, Set<SimRow>>();
+  const visit = (t: SqlTableNode, row: SimRow): string | null => {
+    const set = planned.get(t.name) ?? new Set<SimRow>();
+    if (set.has(row)) return null;
+    set.add(row);
+    planned.set(t.name, set);
+
+    for (const dep of dependentsOf(script, t)) {
+      const refRows = rowsOf(state, dep.table).filter(
+        (r) =>
+          r[dep.column.name] !== null &&
+          r[dep.column.name] === row[dep.column.references!.column],
+      );
+      if (refRows.length === 0) continue;
+      if (dep.column.onDelete === 'CASCADE') {
+        for (const r of refRows) {
+          const err = visit(dep.table, r);
+          if (err) return err;
+        }
+      } else if (!refRows.every((r) => planned.get(dep.table.name)?.has(r))) {
+        return `há registros na tabela ${dep.table.name} que dependem deste (chave estrangeira ${dep.column.name}). Exclua primeiro os registros dependentes.`;
+      }
+    }
+    return null;
+  };
+
+  for (const row of matched) {
+    const err = visit(table, row);
+    if (err) return fail(err);
+  }
+
+  planned.forEach((set, name) => {
+    state.rows[name] = (state.rows[name] ?? []).filter((r) => !set.has(r));
+  });
+
+  const cascaded = Array.from(planned.entries()).filter(([name]) => name !== table.name);
+  const cascadeText = cascaded.length
+    ? ` Em cascata (ON DELETE CASCADE), também foram removidos: ${cascaded
+        .map(([name, set]) => `${plural(set.size, 'registro', 'registros')} de ${name}`)
+        .join(', ')}.`
+    : '';
+  const count = plural(matched.length, 'registro excluído', 'registros excluídos');
+  const left = plural(state.rows[table.name].length, 'registro', 'registros');
+
+  return {
+    ok: true,
+    command: 'DELETE',
+    sql,
+    message: `${count}. Restam ${left}.${cascadeText}`,
+    spoken: `${count}. Restam ${left}.${cascadeText}`,
+    highlight: [],
   };
 }

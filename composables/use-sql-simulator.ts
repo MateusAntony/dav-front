@@ -1,13 +1,17 @@
 import {
   createSimState,
   emptyQuery,
+  emptyWriteQuery,
+  simulateDelete,
   simulateInsertValues,
   simulateSelect,
+  simulateUpdate,
   type SelectQuery,
   type SimResult,
   type SimRow,
   type SimState,
   type SimValue,
+  type WriteQuery,
 } from '~/src/utils/sql-simulator';
 import type { SqlTableNode } from '~/src/utils/sql-generator';
 import type { SimulationRows } from '~/src/interfaces/der-diagram';
@@ -40,6 +44,8 @@ function buildSqlSimulatorStore() {
   // de uma tabela em cima de outra).
   const lastTableName = ref<string | null>(null);
   const query = ref<SelectQuery>(emptyQuery());
+  // Comando UPDATE/DELETE que está sendo montado (SET e WHERE).
+  const writeQuery = ref<WriteQuery>(emptyWriteQuery());
 
   const rowsOf = (table: SqlTableNode | null): SimRow[] =>
     table ? (state.value.rows[table.name] ?? []) : [];
@@ -68,6 +74,7 @@ function buildSqlSimulatorStore() {
     lastResult.value = null;
     lastTableName.value = null;
     query.value = emptyQuery();
+    writeQuery.value = emptyWriteQuery();
   };
 
   // Aviso quando os registros não ficarão salvos.
@@ -112,6 +119,52 @@ function buildSqlSimulatorStore() {
     return result;
   };
 
+  // O UPDATE exige ao menos um registro na tabela. Se estiver vazia, devolve o
+  // erro (e o deixa visível na tela); se estiver tudo certo, devolve null.
+  const checkUpdateAllowed = (table: SqlTableNode): SimResult | null => {
+    const script = currentScript();
+    if (!script || rowsOf(table).length > 0) return null;
+    const result = simulateUpdate(script, table, state.value, emptyWriteQuery());
+    lastResult.value = result;
+    lastTableName.value = table.name;
+    return result;
+  };
+
+  const startWrite = () => {
+    writeQuery.value = emptyWriteQuery();
+  };
+
+  // UPDATE e DELETE alteram os registros: salvam como o INSERT.
+  const finishWrite = (table: SqlTableNode, result: SimResult) => {
+    if (result.ok) {
+      const notice = saveNotice();
+      result.message += notice;
+      result.spoken += notice;
+      persist();
+    }
+    lastResult.value = result;
+    lastTableName.value = table.name;
+    return result;
+  };
+
+  const runUpdate = (table: SqlTableNode): SimResult | null => {
+    const script = currentScript();
+    if (!script) return null;
+    return finishWrite(
+      table,
+      simulateUpdate(script, table, state.value, writeQuery.value),
+    );
+  };
+
+  const runDelete = (table: SqlTableNode): SimResult | null => {
+    const script = currentScript();
+    if (!script) return null;
+    return finishWrite(
+      table,
+      simulateDelete(script, table, state.value, writeQuery.value),
+    );
+  };
+
   // Esconde o resultado do último comando (ex.: ao sair da tela do SELECT).
   const clearResult = () => {
     lastResult.value = null;
@@ -131,6 +184,7 @@ function buildSqlSimulatorStore() {
     lastResult.value = null;
     lastTableName.value = null;
     query.value = emptyQuery();
+    writeQuery.value = emptyWriteQuery();
   };
 
   return {
@@ -138,12 +192,17 @@ function buildSqlSimulatorStore() {
     lastResult,
     lastTableName,
     query,
+    writeQuery,
     rowsOf,
     resultFor,
     hydrate,
     insert,
     startQuery,
     runSelect,
+    startWrite,
+    checkUpdateAllowed,
+    runUpdate,
+    runDelete,
     clearResult,
     clearAll,
     reset,
