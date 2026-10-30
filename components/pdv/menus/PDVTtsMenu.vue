@@ -2,6 +2,8 @@
   <PDVMenu v-if="menu" :menu="menu" />
 </template>
 <script setup lang="ts">
+import { VOICE_NAVIGATION_ENABLED } from '~/src/constants/features';
+
 const { t } = useI18n();
 const menu = ref();
 const tts = useTTS();
@@ -32,17 +34,22 @@ function buildMenu() {
           tts.updateTTSPreferences(false);
         },
       },
-      {
-        label: voiceNav.isListening.value
-          ? 'Desativar navegação por comandos de voz'
-          : 'Ativar navegação por comandos de voz',
-        action: () => {
-          voiceNav.toggle();
-          buildMenu();
-        },
-        infoText:
-          'Depois de ativar, diga próximo, anterior, selecionar, ajuda, voltar, início, ou parar.',
-      },
+      // Navegação por voz: desligada por enquanto (src/constants/features.ts).
+      ...(VOICE_NAVIGATION_ENABLED
+        ? [
+            {
+              label: voiceNav.isListening.value
+                ? 'Desativar navegação por comandos de voz'
+                : 'Ativar navegação por comandos de voz',
+              action: () => {
+                voiceNav.toggle();
+                buildMenu();
+              },
+              infoText:
+                'Depois de ativar, diga próximo, anterior, selecionar, ajuda, voltar, início, ou parar.',
+            },
+          ]
+        : []),
     ],
   };
 }

@@ -3,6 +3,10 @@
 // navegação). Não existe lógica de navegação duplicada aqui — a voz é
 // só mais uma forma de "apertar tecla".
 //
+// DESLIGADA por enquanto: VOICE_NAVIGATION_ENABLED = false em
+// src/constants/features.ts. O código foi mantido; para voltar a usar, troque
+// para true (o item volta ao menu de configuração da síntese de voz).
+//
 // Ativa/desativa pelo menu de configuração da síntese de voz. Enquanto
 // ativa, o teclado de setas fica desligado (o usuário escolhe voz OU
 // teclado, não os dois ao mesmo tempo).
@@ -14,6 +18,8 @@
 // ser chamado. Por isso ele fala direto pela API do navegador, e usa a
 // store do Pinia (que funciona em qualquer contexto) só pra respeitar
 // a velocidade de fala configurada pelo usuário.
+
+import { VOICE_NAVIGATION_ENABLED } from '~/src/constants/features';
 
 interface VoiceCommand {
   patterns: string[];
@@ -171,6 +177,7 @@ function createVoiceNavigation() {
   }
 
   function start() {
+    if (!VOICE_NAVIGATION_ENABLED) return; // recurso desligado
     if (!recognition) setup();
     if (!isSupported.value) {
       speakDirectly('Reconhecimento de voz não é suportado neste navegador.');

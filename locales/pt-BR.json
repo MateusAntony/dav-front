@@ -140,7 +140,8 @@
   },
   "message": {
     "speech_rate_test": "Essa é uma fala teste para verificar a velocidade da leitura. Ajuste conforme necessário para garantir que a fala esteja clara e compreensível. Velocidade atual: {rate}",
-    "navigation_helper": "Para navegar entre as opções do menu, utilize as teclas CIMA e BAIXO para se mover entre as opções. Se preferir, use TAB para avançar para a próxima opção. Pressione ENTER para confirmar sua escolha ou ESC para voltar ao menu anterior. Para retornar ao menu principal, pressione CTRL + HOME. Para acessar o menu de configuração da síntese de voz, pressione CTRL + ALT. Caso deseje interromper a leitura, pressione CTRL. A navegação por comandos de voz pode ser ativada no menu de configuração da síntese de voz. Uma vez ativada, diga próximo, anterior, selecionar, ajuda, voltar, início, ou parar.",
+    "navigation_helper": "Para navegar entre as opções do menu, utilize as teclas CIMA e BAIXO para se mover entre as opções. Se preferir, use TAB para avançar para a próxima opção. Pressione ENTER para confirmar sua escolha ou ESC para voltar ao menu anterior. Para retornar ao menu principal, pressione CTRL + HOME. Para acessar o menu de configuração da síntese de voz, pressione CTRL + ALT. Caso deseje interromper a leitura, pressione CTRL.",
+    "navigation_helper_voice": "A navegação por comandos de voz pode ser ativada no menu de configuração da síntese de voz. Uma vez ativada, diga próximo, anterior, selecionar, ajuda, voltar, início, ou parar.",
     "helper_text": "Pressione a tecla F1 para mais informações sobre a opção selecionada",
     "has_no_entities": "É necessário criar ao menos uma entidade para acessar essa funcionalidade.",
     "has_no_relationships": "É necessário criar ao menos um relacionamento para acessar essa funcionalidade.",
