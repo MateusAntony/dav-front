@@ -9,9 +9,9 @@
     <p class="sql-sim__label">Estrutura (CREATE TABLE)</p>
     <pre class="sql-sim__code"><code>{{ table.technicalCode }}</code></pre>
 
-    <div v-if="isSelectMode" class="sql-sim__result">
-      <p class="sql-sim__label">Consulta que está sendo montada</p>
-      <pre class="sql-sim__code"><code>{{ livePreview }}</code></pre>
+    <div v-if="previewSql" class="sql-sim__result">
+      <p class="sql-sim__label">Comando que está sendo montado</p>
+      <pre class="sql-sim__code"><code>{{ previewSql }}</code></pre>
     </div>
 
     <div
@@ -89,7 +89,12 @@
 
 <script setup lang="ts">
 import { DerFlowEnum } from '~/src/interfaces/pdv-menu';
-import { buildSelectSql, type SimValue } from '~/src/utils/sql-simulator';
+import {
+  buildDeleteSql,
+  buildSelectSql,
+  buildUpdateSql,
+  type SimValue,
+} from '~/src/utils/sql-simulator';
 
 const sqlGen = useSqlGenerator();
 const simulator = useSqlSimulator();
@@ -98,12 +103,21 @@ const menuStore = useMenuOptions();
 const table = computed(() => sqlGen.selectedTable.value);
 const rows = computed(() => simulator.rowsOf(table.value));
 const result = computed(() => simulator.resultFor(table.value));
-const isSelectMode = computed(
-  () => menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT,
-);
-const livePreview = computed(() =>
-  buildSelectSql(simulator.query.value, table.value ?? undefined),
-);
+// Comando que está sendo montado (SELECT, UPDATE ou DELETE), mostrado ao vivo.
+const previewSql = computed(() => {
+  const t = table.value;
+  if (!t) return '';
+  switch (menuStore.activeDerMenu) {
+    case DerFlowEnum.SQL_SELECT:
+      return buildSelectSql(simulator.query.value, t);
+    case DerFlowEnum.SQL_UPDATE:
+      return buildUpdateSql(t.name, simulator.writeQuery.value, t);
+    case DerFlowEnum.SQL_DELETE:
+      return buildDeleteSql(t.name, simulator.writeQuery.value, t);
+    default:
+      return '';
+  }
+});
 
 const display = (value: SimValue | undefined) => {
   if (value === null || value === undefined) return 'NULL';
@@ -111,12 +125,13 @@ const display = (value: SimValue | undefined) => {
   return String(value);
 };
 
-// Só o INSERT destaca uma linha da tabela de registros.
+// INSERT e UPDATE destacam as linhas afetadas na tabela de registros.
 const rowClass = (index: number) => {
   const r = result.value;
-  return r?.command === 'INSERT' && r.highlight.includes(index)
-    ? 'is-inserted'
-    : '';
+  if (!r || !r.highlight.includes(index)) return '';
+  if (r.command === 'INSERT') return 'is-inserted';
+  if (r.command === 'UPDATE') return 'is-updated';
+  return '';
 };
 </script>
 
@@ -204,6 +219,10 @@ const rowClass = (index: number) => {
   font-family: inherit !important;
 }
 /* Linhas destacadas também ganham um contorno, não só cor. */
+tr.is-updated td {
+  background-color: rgba(255, 193, 7, 0.3);
+  font-weight: bold;
+}
 tr.is-inserted td {
   background-color: rgba(27, 127, 59, 0.2);
   font-weight: bold;

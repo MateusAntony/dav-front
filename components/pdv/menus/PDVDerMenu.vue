@@ -55,6 +55,12 @@
   <PDVSqlSelectBuilder
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT"
   />
+  <PDVSqlWriteBuilder
+    v-else-if="
+      menuStore.activeDerMenu === DerFlowEnum.SQL_UPDATE ||
+      menuStore.activeDerMenu === DerFlowEnum.SQL_DELETE
+    "
+  />
   <PDVShareDiagram
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.SHARE_DIAGRAM"
   />

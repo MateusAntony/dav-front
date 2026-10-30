@@ -20,7 +20,9 @@
       diagramTool.diagram.value &&
       (menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL ||
         menuStore.activeDerMenu === DerFlowEnum.SQL_INSERT ||
-        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT) &&
+        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_UPDATE ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_DELETE) &&
       sqlGen.selectedTable.value
     "
   />
@@ -30,7 +32,9 @@
       (menuStore.activeDerMenu === DerFlowEnum.SQL_GENERATOR ||
         menuStore.activeDerMenu === DerFlowEnum.SQL_TABLE_DETAIL ||
         menuStore.activeDerMenu === DerFlowEnum.SQL_INSERT ||
-        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT)
+        menuStore.activeDerMenu === DerFlowEnum.SQL_SELECT ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_UPDATE ||
+        menuStore.activeDerMenu === DerFlowEnum.SQL_DELETE)
     "
   />
   <PDVDiagram v-else-if="diagramTool.diagram.value" />

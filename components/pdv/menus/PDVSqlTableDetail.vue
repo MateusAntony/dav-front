@@ -53,6 +53,26 @@ function buildMenu() {
         },
       },
       {
+        label: 'UPDATE: alterar registros',
+        action: () => {
+          // Sem nenhum registro não há o que alterar: pede o INSERT antes.
+          const blocked = simulator.checkUpdateAllowed(table);
+          if (blocked) {
+            tts.speakPhrase(blocked.spoken);
+            return;
+          }
+          simulator.startWrite();
+          menuStore.setActiveDerMenu(DerFlowEnum.SQL_UPDATE);
+        },
+      },
+      {
+        label: 'DELETE: excluir registros',
+        action: () => {
+          simulator.startWrite();
+          menuStore.setActiveDerMenu(DerFlowEnum.SQL_DELETE);
+        },
+      },
+      {
         label: 'Limpar todos os registros de exemplo',
         action: clearRecords,
       },
