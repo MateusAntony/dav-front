@@ -21,6 +21,9 @@ export function useDiagramsApi() {
       body: { serialized_object, ...(name ? { name } : {}) },
     });
 
+  const deleteDiagram = (id: string) =>
+    request<void>(`/diagrams/${id}`, { method: 'DELETE' });
+
   const setPublicShare = (id: string, enabled: boolean) =>
     request<any>(`/diagrams/${id}/shares/public`, {
       method: 'POST',
@@ -40,5 +43,5 @@ export function useDiagramsApi() {
 
   const getPublicDiagram = (token: string) => request<any>(`/public/diagrams/${token}`);
 
-  return { listDiagrams, getDiagram, createDiagram, updateDiagram, setPublicShare, shareWithUser, listShares, removeShare, getPublicDiagram };
+  return { listDiagrams, getDiagram, createDiagram, updateDiagram, deleteDiagram, setPublicShare, shareWithUser, listShares, removeShare, getPublicDiagram };
 }

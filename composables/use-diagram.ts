@@ -283,9 +283,33 @@ export function useDiagram() {
     //   /** TODO - Função de update diagram */
     // };
 
-    // const deleteDiagram = (diagramId: string) => {
-    //   /** TODO - Função de delete diagram */
-    // };
+    // Exclui (no backend é uma desativação) o diagrama aberto. Só o dono pode.
+    // Depois de excluir, libera a vaga no limite de diagramas e volta para a
+    // lista de projetos (ou para a criação de um novo, se não restar nenhum).
+    const deleteDiagram = async () => {
+      const current = diagram.value;
+      if (!current || isReadOnly.value) return;
+      const { deleteDiagram: deleteDiagramRequest } = useDiagramsApi();
+      try {
+        await deleteDiagramRequest(current.id);
+      } catch (error) {
+        console.error('Erro ao excluir diagrama:', error);
+        tts.speakPhrase(i18n.t('message.delete_diagram_error'));
+        menu.setActiveDerMenu(DerFlowEnum.DEFAULT);
+        return;
+      }
+      diagramsList.value = diagramsList.value.filter((d) => d.id !== current.id);
+      diagram.value = null;
+      parsedDiagram.value = null;
+      isReadOnly.value = false;
+      tts.speakPhrase(i18n.t('message.delete_diagram_success'));
+      const ownDiagrams = diagramsList.value.filter((d) => d.is_owner);
+      menu.setActiveDerMenu(
+        ownDiagrams.length === 0
+          ? DerFlowEnum.NEW_DIAGRAM
+          : DerFlowEnum.DIAGRAM_LIST,
+      );
+    };
 
     const createEntity = (name: string) => {
       if (denyIfReadOnly()) return;
@@ -770,7 +794,7 @@ export function useDiagram() {
       selectDiagram,
       createNewDiagram,
       // updateDiagram,
-      // deleteDiagram,
+      deleteDiagram,
     };
   }
 

@@ -43,6 +43,7 @@
         "default": "Projeto {project}",
         "entity_options": "Opções da entidade {entity}",
         "delete_entity": "Excluir entidade {entity}",
+        "delete_diagram": "Excluir projeto {project}",
         "relationship_options": "Opções do relacionamento {relationship}",
         "delete_relationship": "Excluir relacionamento {relationship}",
         "attribute_options": "Opções do atributo {attribute}",
@@ -89,7 +90,8 @@
         },
         "diagram": {
           "read": "Leitura do diagrama {diagram}",
-          "generate_sql": "Gerar SQL"
+          "generate_sql": "Gerar SQL",
+          "delete": "Excluir diagrama"
         }
       }
     }
@@ -148,6 +150,9 @@
     "has_not_two_entities": "É necessário criar ao menos duas entidades para acessar essa funcionalidade.",
     "has_no_attributes": "É necessário que a entidade possua ao menos um atributo para acessar essa funcionalidade.",
     "delete_entity": "Ao excluir a entidade, todos os relacionamentos associados serão perdidos.",
+    "delete_diagram": "Exclui o diagrama inteiro, com suas entidades, atributos e relacionamentos. Essa ação não pode ser desfeita e o compartilhamento do diagrama também deixa de funcionar.",
+    "delete_diagram_success": "Diagrama excluído com sucesso.",
+    "delete_diagram_error": "Não foi possível excluir o diagrama. Tente novamente.",
     "loading": "Carregando, por favor aguarde...",
     "desktop_only": "Olá! Nosso sistema foi otimizado para uso em desktop, com navegação e funcionalidades específicas para teclado, garantindo uma experiência completa e eficiente. Para aproveitar todos os recursos, recomendamos acessar a plataforma em um computador. Agradecemos sua compreensão!",
     "empty_input": "A informação 'Nome' está em branco. Por favor, preencha para continuar.",

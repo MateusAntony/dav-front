@@ -39,6 +39,7 @@ export enum DerFlowEnum {
   NEW_ATTR,
   NEW_RELATIONSHIP,
   SHARE_DIAGRAM,
+  DELETE_DIAGRAM,
 }
 
 export const previousDerMenuMapping: Record<
@@ -67,4 +68,5 @@ export const previousDerMenuMapping: Record<
   [DerFlowEnum.NEW_ATTR]: DerFlowEnum.ENTITY_OPTIONS,
   [DerFlowEnum.NEW_RELATIONSHIP]: DerFlowEnum.DEFAULT,
   [DerFlowEnum.SHARE_DIAGRAM]: DerFlowEnum.DEFAULT,
+  [DerFlowEnum.DELETE_DIAGRAM]: DerFlowEnum.DEFAULT,
 };

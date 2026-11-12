@@ -64,6 +64,9 @@
   <PDVShareDiagram
     v-else-if="menuStore.activeDerMenu === DerFlowEnum.SHARE_DIAGRAM"
   />
+  <PDVDerDeleteDiagram
+    v-else-if="menuStore.activeDerMenu === DerFlowEnum.DELETE_DIAGRAM"
+  />
 </template>
 <script setup lang="ts">
 import PDVDerDeleteEntity from '../entities/PDVDerDeleteEntity.vue';

@@ -9,6 +9,7 @@ const diagramTool = useDiagram();
 const menuStore = useMenuOptions();
 const { t } = useI18n();
 const tts = useTTS();
+const authStore = useAuthStore();
 
 const menu = ref();
 
@@ -97,6 +98,12 @@ onBeforeMount(() => {
       'Convide outro usuário para visualizar o diagrama ou exporte em PDF.',
   };
 
+  const deleteDiagram = {
+    label: t('menu.der_flow.options.diagram.delete'),
+    action: () => menuStore.setActiveDerMenu(DerFlowEnum.DELETE_DIAGRAM),
+    infoText: t('message.delete_diagram'),
+  };
+
   menu.value = {
     title: t('menu.der_flow.titles.default', {
       project: diagramTool.diagram.value?.name,
@@ -127,6 +134,8 @@ onBeforeMount(() => {
           generateSql,
           share,
           reorganize,
+          // Convidado não tem diagrama salvo no servidor, então não há o que excluir.
+          ...(authStore.token ? [deleteDiagram] : []),
         ],
   };
 });
