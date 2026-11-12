@@ -95,7 +95,7 @@ onBeforeMount(() => {
     label: 'Compartilhar diagrama',
     action: () => menuStore.setActiveDerMenu(DerFlowEnum.SHARE_DIAGRAM),
     infoText:
-      'Convide outro usuário para visualizar o diagrama ou exporte em PDF.',
+      'Convide outro usuário para visualizar o diagrama.',
   };
 
   const deleteDiagram = {

@@ -19,10 +19,6 @@
     >
       {{ share.name }} ({{ share.email }}) — remover acesso
     </FocusableElement>
-
-    <FocusableElement title="Exportar diagrama como PDF" @click="exportPdf">
-      Exportar como PDF
-    </FocusableElement>
   </section>
 </template>
 
@@ -64,10 +60,6 @@ async function revokeShare(shareId: string) {
   shares.value = shares.value.filter((share) => share.id !== shareId);
   feedback.value = 'Acesso removido.';
   tts.speakPhrase(feedback.value);
-}
-
-function exportPdf() {
-  window.print();
 }
 
 onMounted(() => {
